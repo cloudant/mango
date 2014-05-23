@@ -4,7 +4,8 @@
 -export([
     create/3,
     list/1,
-    delete/3
+    delete/3,
+    get_index_size/2
 ]).
 
 
@@ -28,7 +29,6 @@ create(Db, Index, Opts) ->
             end
     end.
 
-
 list(Db) ->
     {ok, DDocs0} = mango_util:open_ddocs(Db),
     Pred = fun({Props}) ->
@@ -43,10 +43,16 @@ list(Db) ->
         mango_idx:from_ddoc(Db, Doc)
     end, DDocs).
 
-
 delete(_Db, _DDocId, _IndexName) ->
     ok.
 
+get_index_size(Db,DDocId) ->
+    case DDocId of
+        undefined -> DiskSize={<<"size">>,<<"N/A">>};
+        _ -> 
+        {ok,[_,_,_,_,_,_,_,DiskSize | Rest]}=fabric:get_view_group_info(Db,DDocId)
+    end,
+    DiskSize.
 
 load_ddoc(Db, DDocId) ->
     case mango_util:open_doc(Db, DDocId) of
