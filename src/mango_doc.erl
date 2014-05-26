@@ -2,13 +2,10 @@
 
 
 -export([
-    open/3,
-    open_ddocs/2,
-    save/3,
-
     from_bson/1,
 
     apply_update/2,
+    update_as_insert/1,
     has_operators/1,
 
     get_field/2,
@@ -19,42 +16,6 @@
 
 
 -include_lib("couch/include/couch_db.hrl").
-
-
-open(DbName, DocId, Ctx) ->
-    Opts = [deleted, {user_ctx, mango_ctx:get_auth(Ctx)}],
-    try mango_util:defer(fabric, open_doc, [DbName, DocId, Opts]) of
-        {ok, Doc} ->
-            {ok, Doc};
-        {not_found, _} ->
-            not_found;
-        {error, Reason} ->
-            throw(Reason);
-        Error ->
-            throw(Error)
-    catch error:database_does_not_exist ->
-        not_found
-    end.
-
-
-open_ddocs(DbName, _Ctx) ->
-    try mango_util:defer(fabric, design_docs, [DbName]) of
-        {ok, Docs} ->
-            {ok, Docs};
-        {error, Reason} ->
-            throw(Reason);
-        Error ->
-            throw(Error)
-    catch error:database_does_not_exist ->
-        {ok, []}
-    end.
-
-
-save(DbName, #doc{}=Doc, Ctx) ->
-    save(DbName, [Doc], Ctx);
-save(DbName, Docs, Ctx) when is_list(Docs) ->
-    Opts = [{user_ctx, mango_ctx:get_auth(Ctx)}],
-    mango_util:defer(fabric, update_docs, [DbName, Docs, Opts]).
 
 
 from_bson({Props}) ->
@@ -79,15 +40,23 @@ from_bson({Props}) ->
     end.
 
 
-apply_update(#doc{body={Props}}=Doc, {Update}) ->
-    Result = do_update(Props, Update),
+apply_update(#doc{body={Props}}=Doc, Update) ->
+    NewProps = apply_update(Props, Update),
+    Doc#doc{body={NewProps}};
+apply_update({Props}, {Update}) ->
+    Result = do_update({Props}, Update),
     case has_operators(Result) of
         true ->
             throw(update_leaves_operators);
         false ->
             ok
     end,
-    Doc#doc{body={Result}}.
+    Result.
+
+
+update_as_insert({Update}) ->
+    NewProps = do_update_to_insert(Update, {[]}),
+    apply_update(NewProps, {Update}).
 
 
 has_operators(#doc{body=Body}) ->
@@ -131,6 +100,8 @@ has_operators_arr([V | Rest]) ->
     end.
 
 
+do_update(Props, []) ->
+    Props;
 do_update(Props, [{Op, Value} | Rest]) ->
     UpdateFun = update_operator_fun(Op),
     NewProps = case UpdateFun of
@@ -152,9 +123,9 @@ update_operator_fun(<<"$", _/binary>> = Op) ->
         % Object operators
         {<<"$inc">>, fun do_update_inc/2},
         {<<"$rename">>, fun do_update_rename/2},
-        %{<<"$setOnInsert">>, fun do_update_set_on_insert/2},
+        {<<"$setOnInsert">>, fun do_update_set_on_insert/2},
         {<<"$set">>, fun do_update_set/2},
-        {<<"$unsert">>, fun do_update_unset/2},
+        {<<"$unset">>, fun do_update_unset/2},
 
         % Array opereators
         {<<"$addToSet">>, fun do_update_add_to_set/2},
@@ -204,6 +175,13 @@ do_update_rename(Props, [{OldField, NewField} | Rest]) ->
             Props
     end,
     do_update_rename(NewProps, Rest).
+
+
+do_update_set_on_insert(Props, _) ->
+    % This is only called during calls to apply_update/2
+    % which means this isn't an insert, so drop it on
+    % the floor.
+    Props.
 
 
 do_update_set(Props, []) ->
@@ -364,6 +342,16 @@ do_update_bitwise(Props, [{Field, Value} | Rest]) ->
             Props
     end,
     do_update_bitwise(NewProps, Rest).
+
+
+do_update_to_insert([], Doc) ->
+    Doc;
+do_update_to_insert([{<<"$setOnInsert">>, {FieldProps}}], Doc) ->
+    lists:foldl(fun({Field, Value}, DocAcc) ->
+        set_field(DocAcc, Field, Value)
+    end, Doc, FieldProps);
+do_update_to_insert([{_, _} | Rest], Doc) ->
+    do_update_to_insert(Rest, Doc).
 
 
 get_field(Props, Field) ->

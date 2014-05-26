@@ -2,24 +2,53 @@
 
 
 -export([
+    open_doc/2,
+    open_ddocs/1,
+
     defer/3,
     do_defer/3,
 
-    cloudant_dbname/2,
-    maybe_create_db/2,
-    maybe_create_db/1,
+    format_error/1,
+    fmt/2,
+
+    assert_ejson/1,
 
     to_lower/1,
-    
+
     enc_dbname/1,
     dec_dbname/1,
-    
+
     enc_hex/1,
     dec_hex/1
 ]).
 
 
+-include("mango.hrl").
+
+
+open_doc(Db, DocId) ->
+    Opts = [deleted],
+    case mango_util:defer(fabric, open_doc, [Db, DocId, Opts]) of
+        {ok, Doc} ->
+            {ok, Doc};
+        {not_found, _} ->
+            not_found;
+        _ ->
+            ?MANGO_ERROR({error_loading_doc, DocId})
+    end.
+
+
+open_ddocs(Db) ->
+    case mango_util:defer(fabric, design_docs, [Db]) of
+        {ok, Docs} ->
+            {ok, Docs};
+        _ ->
+            ?MANGO_ERROR(error_loading_ddocs)
+    end.
+
+
 defer(Mod, Fun, Args) ->
+    %twig:log(error, "MFA: ~p", [{Mod, Fun, Args}]),
     {Pid, Ref} = erlang:spawn_monitor(?MODULE, do_defer, [Mod, Fun, Args]),
     receive
         {'DOWN', Ref, process, Pid, {mango_defer_ok, Value}} ->
@@ -39,39 +68,69 @@ do_defer(Mod, Fun, Args) ->
             erlang:exit({mango_defer_ok, Resp})
     catch
         throw:Error ->
+            Stack = erlang:get_stacktrace(),
+            twig:log(err, "Defered error: ~w~n    ~p", [{throw, Error}, Stack]),
             erlang:exit({mango_defer_throw, Error});
         error:Error ->
+            Stack = erlang:get_stacktrace(),
+            twig:log(err, "Defered error: ~w~n    ~p", [{error, Error}, Stack]),
             erlang:exit({mango_defer_error, Error});
         exit:Error ->
+            Stack = erlang:get_stacktrace(),
+            twig:log(err, "Defered error: ~w~n    ~p", [{exit, Error}, Stack]),
             erlang:exit({mango_defer_exit, Error})
     end.
 
 
-cloudant_dbname(Msg, Ctx) ->
-    Username = mango_ctx:username(Ctx),
-    Collection = mango_msg:prop(collection, Msg),
-    RawDbName = <<Username/binary, "/", Collection/binary>>,
-    enc_dbname(RawDbName).
+format_error({mango_error, Module, Error}) ->
+    Module:format_error(Error);
+format_error(Else) ->
+    fmt("Unknown error: ~w", [Else]).
 
 
-maybe_create_db(Msg, Ctx) ->
-    maybe_create_db(cloudant_dbname(Msg, Ctx)).
+fmt(Format, Args) ->
+    iolist_to_binary(io_lib:format(Format, Args)).
 
 
-maybe_create_db(DbName) ->
-    try
-        mem3:shards(DbName),
-        {ok, DbName}
-    catch
-        error:database_does_not_exist ->        
-            case mango_util:defer(fabric, create_db, [DbName]) of
-                ok ->
-                    {ok, DbName};
-                accepted ->
-                    {ok, DbName};
-                Error ->
-                    throw(Error)
-            end
+assert_ejson({Props}) ->
+    assert_ejson_obj(Props);
+assert_ejson(Vals) when is_list(Vals) ->
+    assert_ejson_arr(Vals);
+assert_ejson(null) ->
+    true;
+assert_ejson(true) ->
+    true;
+assert_ejson(false) ->
+    true;
+assert_ejson(String) when is_binary(String) ->
+    true;
+assert_ejson(Number) when is_number(Number) ->
+    true;
+assert_ejson(_Else) ->
+    false.
+
+
+assert_ejson_obj([]) ->
+    true;
+assert_ejson_obj([{Key, Val} | Rest]) when is_binary(Key) ->
+    case assert_ejson(Val) of
+        true ->
+            assert_ejson_obj(Rest);
+        false ->
+            false
+    end;
+assert_ejson_obj(_Else) ->
+    false.
+
+
+assert_ejson_arr([]) ->
+    true;
+assert_ejson_arr([Val | Rest]) ->
+    case assert_ejson(Val) of
+        true ->
+            assert_ejson_arr(Rest);
+        false ->
+            false
     end.
 
 
@@ -95,7 +154,7 @@ enc_db_byte(N) when N == $/; N == $_; N == $- -> <<N>>;
 enc_db_byte(N) ->
     H = enc_hex_byte(N div 16),
     L = enc_hex_byte(N rem 16),
-    <<$$, H:8/integer, L:8/integer>>.    
+    <<$$, H:8/integer, L:8/integer>>.
 
 
 dec_dbname(<<>>) ->
@@ -139,3 +198,5 @@ dec_hex_byte(N) when N >= $0, N =< $9 -> (N - $0);
 dec_hex_byte(N) when N >= $a, N =< $f -> (N - $a) + 10;
 dec_hex_byte(N) when N >= $A, N =< $F -> (N - $A) + 10;
 dec_hex_byte(N) -> throw({invalid_hex_character, N}).
+
+
