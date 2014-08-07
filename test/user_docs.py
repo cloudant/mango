@@ -339,7 +339,8 @@ DOCS = [
             "Erlang",
             "Python"
         ],
-        "exists_array" : ["should", "exist", "array1"]
+        "exists_array" : ["should", "exist", "array1"],
+        "complex_field_value" : "+-(){}[]^~&&*||\"\\/?:!"
     },
     {
         "_id": "e900001d-bc48-48a6-9b1a-ac9a1f5d1a03",
@@ -444,16 +445,11 @@ DOCS = [
             "C",
             "Ruby",
             "Ruby"
-        ],
-        "utf8-1[]:string" : "string",
-        "utf8-2[]:boolean[]" : True,
-        "utf8-3[]:number" : 9,
-        "utf8-3[]:null" : None
+        ]
     },
     {
         "_id": "c78c529f-0b07-4947-90a6-d6b7ca81da62",
         "user_id": 14,
-        "«ταБЬℓσ»" : "utf-8",
         "name": {
             "first": "Faith",
             "last": "Hess"
