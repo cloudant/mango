@@ -44,8 +44,7 @@ def test_bad_types():
         True,
         False,
         1.5,
-        "foo",
-        "text", # Future support
+        "foo", # Future support
         "geo", # Future support
         {"foo": "bar"},
         ["baz", 3.0]
