@@ -67,6 +67,9 @@ handle_call({prompt, [<<"reduce">>, _, _]}, _From, St) ->
 handle_call({prompt, [<<"rereduce">>, _, _]}, _From, St) ->
     {reply, null, St};
 
+handle_call({prompt, [<<"index_doc">>, Doc]}, _From, St) ->
+    {reply, index_doc(St, mango_json:to_binary(Doc)), St};
+
 handle_call(Msg, _From, St) ->
     {stop, {invalid_call, Msg}, {invalid_call, Msg}, St}.
 
@@ -91,6 +94,11 @@ map_doc(#st{indexes=Indexes}, Doc) ->
     lists:map(fun(Idx) -> get_index_entries(Idx, Doc) end, Indexes).
 
 
+index_doc(#st{indexes=Indexes}, Doc) ->
+    erlang:display(indexdoc),
+    lists:map(fun(Idx) -> get_text_entries(Idx, Doc) end, Indexes).
+
+
 get_index_entries({IdxProps}, Doc) ->
     {Fields} = couch_util:get_value(<<"fields">>, IdxProps),
     Values = lists:map(fun({Field, _Dir}) ->
@@ -105,4 +113,21 @@ get_index_entries({IdxProps}, Doc) ->
             [];
         false ->
             [[Values, null]]
+    end.
+    
+
+get_text_entries({IdxProps}, Doc) ->
+    Fields = couch_util:get_value(<<"fields">>, IdxProps),
+    Values = lists:map(fun(Field) ->
+        case mango_doc:get_field(Doc, Field) of
+            not_found -> not_found;
+            bad_path -> not_found;
+            Else -> [Field, Else,[{<<"store">>,true}]]
+        end
+    end, Fields),
+    case lists:member(not_found, Values) of
+        true ->
+            [];
+        false ->
+            Values
     end.

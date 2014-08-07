@@ -24,7 +24,11 @@ to_json({Fields}) ->
 to_json([]) ->
     [];
 to_json([{Name, Dir} | Rest]) ->
-    [{[{Name, Dir}]} | to_json(Rest)].
+    [{[{Name, Dir}]} | to_json(Rest)];
+to_json([Name | Rest]) ->
+    [Name | to_json(Rest)].
+
+
 
 
 fields({Props}) ->
