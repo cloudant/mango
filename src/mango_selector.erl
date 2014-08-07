@@ -5,7 +5,8 @@
     normalize/1,
     index_fields/1,
     range/2,
-    match/2
+    match/2,
+    index_cursor_type/1
 ]).
 
 
@@ -411,6 +412,10 @@ indexable({[{<<"$gt">>, _}]}) ->
     true;
 indexable({[{<<"$gte">>, _}]}) ->
     true;
+% indexable({[{<<"$text">>, _}]}) ->
+%     true;
+% indexable({[{<<"$text">>, _},_]}) ->
+%     true;
 
 % All other operators are currently not indexable.
 % This is also a subtle assertion that we don't
@@ -710,3 +715,28 @@ match({[{Field, Cond}]}, Value, Cmp) ->
 
 match({Props} = Sel, _Value, _Cmp) when length(Props) > 1 ->
     erlang:error({unnormalized_selector, Sel}).
+
+%% Checks to see if the selector is using a $text operator somewhere.
+%% Return a mango_cursor_text for text cursor.
+index_cursor_type(<<"$text">>) ->
+    mango_cursor_text;
+index_cursor_type(<<"$", _/binary>>)->
+    mango_cursor_view;
+index_cursor_type(Selector) when is_list(Selector) ->
+    Types = lists:map(fun (Arg) ->
+        index_cursor_type(Arg)
+    end, Selector),
+    case lists:member(mango_cursor_text, Types) of
+        true -> mango_cursor_text;
+        false -> mango_cursor_view
+    end;
+index_cursor_type(Selector)  when is_tuple(Selector)->
+    Types = lists:map(fun (Arg) ->
+        index_cursor_type(Arg)
+    end, tuple_to_list(Selector)),
+    case lists:member(mango_cursor_text, Types) of
+        true -> mango_cursor_text;
+        false -> mango_cursor_view
+    end;
+index_cursor_type(_) ->
+    mango_cursor_view.

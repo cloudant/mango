@@ -160,7 +160,10 @@ validate_idx_name(Else) ->
 
 
 validate_selector({Props}) ->
-    Norm = mango_selector:normalize({Props}),
+    Norm = case mango_selector:index_cursor_type({Props}) of
+        mango_cursor_text -> mango_text_selector:normalize({Props});
+        _ -> mango_selector:normalize({Props})
+    end,
     {ok, Norm};
 validate_selector(Else) ->
     ?MANGO_ERROR({invalid_selector_json, Else}).

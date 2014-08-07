@@ -6,18 +6,6 @@
 ]).
 
 
-info(mango_cursor, {no_usable_index, operator_unsupported}) ->
-    {
-        400,
-        <<"no_usable_index">>,
-        <<"There is no operator in this selector can used with an index.">>
-    };
-info(mango_cursor, {no_usable_index, query_unsupported}) ->
-    {
-        400,
-        <<"no_usable_index">>,
-        <<"Query unsupported because it would require multiple indices.">>
-    };
 info(mango_cursor, {no_usable_index, sort_field}) ->
     {
         400,
@@ -32,13 +20,54 @@ info(mango_cursor, {no_usable_index, {sort, Fields}}) ->
         <<"no_usable_index">>,
         fmt("No index exists for this sort, try indexing: ~s", [S1])
     };
-info(mango_cursor, {no_usable_index, {fields, Possible}}) ->
+
+info(mango_cursor_text, {no_usable_index, operator_unsupported}) ->
+    {
+        400,
+        <<"no_usable_index">>,
+        <<"There is no operator in this selector that can used with a text index.">>
+    };
+info(mango_cursor_text, {no_usable_index, {fields, Possible}}) ->
+    S0 = [binary_to_list(P) || P <- Possible],
+    S1 = string:join(S0, ", "),
+    {
+        400,
+        <<"no_usable_index">>,
+        fmt("No text index exists for this selector, try indexing one of: ~s", [S1])
+    };
+info(mango_cursor_text, {text_search_error, {error, Error}}) ->
+    {
+        400,
+        <<"text_search_error">>,
+        fmt("text_search_error: ~s", [Error])
+    };
+info(mango_cursor_text, {unknown_option, {option, Option}}) ->
+    {
+        400,
+        <<"unknown_option">>,
+        fmt("Unknown text search option: ~s", [Option])
+    };
+
+info(mango_cursor_view, {no_usable_index, {fields, Possible}}) ->
     S0 = [binary_to_list(P) || P <- Possible],
     S1 = string:join(S0, ", "),
     {
         400,
         <<"no_usable_index">>,
         fmt("No index exists for this selector, try indexing one of: ~s", [S1])
+    };
+
+info(mango_cursor_view, {no_usable_index, operator_unsupported}) ->
+    {
+        400,
+        <<"no_usable_index">>,
+        <<"There is no operator in this selector can used with an index.">>
+    };
+info(mango_cursor_view, {no_usable_index, query_unsupported}) ->
+    {
+        400,
+        <<"no_usable_index">>,
+        <<"Query unsupported because it would require multiple indices.">>
     };
 
 info(mango_fields, {invalid_fields_json, BadFields}) ->
@@ -91,6 +120,25 @@ info(mango_idx_view, {index_not_found, BadIdx}) ->
         404,
         <<"index_not_found">>,
         fmt("JSON index ~s not found in this design doc.", [BadIdx])
+    };
+
+info(mango_idx_text, {invalid_index_text, BadIdx}) ->
+    {
+        400,
+        <<"invalid_index_text">>,
+        fmt("Text indexes must be an object, not: ~w", [BadIdx])
+    };
+info(mango_idx_text, {index_not_found, BadIdx}) ->
+    {
+        404,
+        <<"index_not_found">>,
+        fmt("Text index ~s not found in this design doc.", [BadIdx])
+    };
+info(mango_idx_text, {invalid_index_type, BadType}) ->
+    {
+        400,
+        <<"invalid_index_type">>,
+        fmt("Invalid type for index: ~s", [BadType])
     };
 
 info(mango_opts, {invalid_ejson, Val}) ->
@@ -160,6 +208,13 @@ info(mango_opts, {invalid_selector_json, BadSel}) ->
         fmt("Selector must be a JSON object, not: ~w", [BadSel])
     };
 
+info(mango_opts, {multiple_text_operator, {invalid_selector, BadSel}}) ->
+    {
+        400,
+        <<"multiple_text_selector">>,
+        fmt("Selector cannot contain more than one $text operator: ~w", [BadSel])
+    };
+    
 info(mango_selector, {invalid_selector, missing_field_name}) ->
     {
         400,
@@ -214,6 +269,31 @@ info(mango_sort, {unsupported, mixed_sort}) ->
         400,
         <<"unsupported_mixed_sort">>,
         <<"Sorts currently only support a single direction for all fields.">>
+    };
+
+info(mango_text_selector, {bad_arg, Op, Arg}) ->
+    {
+        400,
+        <<"bad_arg">>,
+        fmt("Bad argument for text search operator ~s: ~w", [Op, Arg])
+    };
+info(mango_text_selector, {not_supported, Op}) ->
+    {
+        400,
+        <<"not_supported">>,
+        fmt("Unsupported text search operator: ~s", [Op])
+    };
+info(mango_text_selector, {invalid_operator, Op}) ->
+    {
+        400,
+        <<"invalid_operator">>,
+        fmt("Invalid text operator: ~s", [Op])
+    };
+info(mango_text_selector, {invalid_selector, Arg}) ->
+    {
+        400,
+        <<"invalid_selector">>,
+        fmt("Selector was invalid: ~w.", [Arg])
     };
 
 info(mango_util, {invalid_ddoc_lang, Lang}) ->

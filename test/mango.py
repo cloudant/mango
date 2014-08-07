@@ -76,6 +76,25 @@ class Database(object):
         r = self.sess.post(self.path("_index"), data=body)
         r.raise_for_status()
         return r.json()["result"] == "created"
+    
+    def create_text_index(self, fields, analyzer, selector, idx_type="text", name=None, ddoc=None):
+        body = {
+            "index": {
+                "analyzer": analyzer,
+                "fields": fields,
+                "selector" : selector
+            },
+            "type": idx_type,
+            "w": 3,
+        }
+        if name is not None:
+            body["name"] = name
+        if ddoc is not None:
+            body["ddoc"] = ddoc
+        body = json.dumps(body)
+        r = self.sess.post(self.path("_index"), data=body)
+        r.raise_for_status()
+        return r.json()["result"] == "created"
 
     def list_indexes(self):
         r = self.sess.get(self.path("_index"))
