@@ -17,6 +17,7 @@
 
 validate(#idx{}=Idx) ->
     {ok, Def} = do_validate(Idx#idx.def),
+    %TODO: Validate the analyzer json? 
     {ok, Idx#idx{def=Def}}.
 
 
@@ -56,12 +57,14 @@ from_ddoc({Props}) ->
         {<<"indexes">>, {Texts}} when is_list(Texts) ->
             lists:flatmap(fun({Name, {VProps}}) ->
                 Def = proplists:get_value(<<"index">>, VProps),
+                Alyzer = proplists:get_value(<<"analyzer">>, VProps),
                 {Opts0} = proplists:get_value(<<"options">>, VProps),
                 Opts = lists:keydelete(<<"sort">>, 1, Opts0),
                 I = #idx{
                     type = <<"text">>,
                     name = Name,
                     def = Def,
+                    analyzer = Alyzer,
                     opts = Opts
                 },
                 % TODO: Validate the index definition
@@ -77,9 +80,9 @@ to_json(Idx) ->
         {ddoc, Idx#idx.ddoc},
         {name, Idx#idx.name},
         {type, Idx#idx.type},
-        {def, {def_to_json(Idx#idx.def)}}
+        {def, {def_to_json(Idx#idx.def)}},
+        {analyzer, Idx#idx.analyzer}
     ]}.
-
 
 columns(Idx) ->
     {Props} = Idx#idx.def,
@@ -107,17 +110,19 @@ def_to_json([{Key, Value} | Rest]) ->
 
 
 opts() ->
-    [
+    [   
         {<<"fields">>, [
             {tag, fields},
             {validator, fun mango_opts:validate_fields/1}
         ]}
+      
     ].
 
 
 make_text(Idx) ->
     Text= {[
         {<<"index">>, Idx#idx.def},
+        {<<"analyzer">>, Idx#idx.analyzer},
         {<<"options">>, {Idx#idx.opts}}
     ]},
     {Idx#idx.name, Text}.

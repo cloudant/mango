@@ -95,7 +95,6 @@ map_doc(#st{indexes=Indexes}, Doc) ->
 
 
 index_doc(#st{indexes=Indexes}, Doc) ->
-    erlang:display(indexdoc),
     lists:map(fun(Idx) -> get_text_entries(Idx, Doc) end, Indexes).
 
 

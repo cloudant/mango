@@ -55,12 +55,14 @@ new(Db, Opts) ->
     Type = get_idx_type(Opts),
     IdxName = get_idx_name(Def, Opts),
     DDoc = get_idx_ddoc(Def, Opts),
+    Alyzer = get_idx_alyzer(Opts),
     {ok, #idx{
         dbname = db_to_name(Db),
         ddoc = DDoc,
         name = IdxName,
         type = Type,
         def = Def,
+        analyzer=Alyzer,
         opts = filter_opts(Opts)
     }}.
 
@@ -96,7 +98,7 @@ from_ddoc(Db, {Props}) ->
             ?MANGO_ERROR(invalid_query_ddoc_language)
     end,
 
-    IdxMods = [mango_idx_view,mango_idx_text],
+    IdxMods = [mango_idx_view, mango_idx_text],
     Idxs = lists:flatmap(fun(Mod) -> Mod:from_ddoc({Props}) end, IdxMods),
     lists:map(fun(Idx) ->
         Idx#idx{
@@ -140,6 +142,10 @@ def(#idx{def=Def}) ->
 
 opts(#idx{opts=Opts}) ->
     Opts.
+
+
+alyzer(#idx{analyzer=Alyzer}) ->
+    Alyzer.
 
 
 to_json(#idx{}=Idx) ->
@@ -224,6 +230,15 @@ get_idx_name(Idx, Opts) ->
             Name;
         _ ->
             gen_name(Idx, Opts)
+    end.
+
+
+get_idx_alyzer(Opts) ->
+    case proplists:get_value(analyzer, Opts) of
+       undefined ->
+            <<"standard">>;
+        Alyzer ->
+            Alyzer
     end.
 
 

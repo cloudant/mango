@@ -29,6 +29,11 @@ validate_idx_create({Props}) ->
         {<<"index">>, [
             {tag, def}
         ]},
+        {<<"analyzer">>, [
+            {tag, analyzer},
+            {optional, true},
+            {default, <<"standard">>}
+        ]},
         {<<"type">>, [
             {tag, type},
             {optional, true},
