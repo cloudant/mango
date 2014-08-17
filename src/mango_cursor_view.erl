@@ -70,6 +70,7 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
         user_fun = UserFun,
         user_acc = UserAcc
     },
+
     case Cursor#cursor.ranges of
         [empty] ->
             % empty indicates unsatisfiable ranges, so don't perform search
@@ -146,10 +147,8 @@ choose_best_index(_DbName, IndexRanges) ->
 
 
 handle_message({total_and_offset, _, _} = _TO, Cursor) ->
-    %twig:log(err, "TOTAL AND OFFSET: ~p", [_TO]),
     {ok, Cursor};
 handle_message({row, {Props}}, Cursor) ->
-    %twig:log(err, "ROW: ~p", [Props]),
     case doc_member(Cursor#cursor.db, Props, Cursor#cursor.opts) of
         {ok, Doc} ->
             case mango_selector:match(Cursor#cursor.selector, Doc) of
@@ -160,14 +159,12 @@ handle_message({row, {Props}}, Cursor) ->
                     {ok, Cursor}
             end;
         Error ->
-            twig:log(err, "~s :: Error loading doc: ~p", [?MODULE, Error]),
+            couch_log:error("~s :: Error loading doc: ~p", [?MODULE, Error]),
             {ok, Cursor}
     end;
 handle_message(complete, Cursor) ->
-    %twig:log(err, "COMPLETE", []),
     {ok, Cursor};
 handle_message({error, Reason}, _Cursor) ->
-    %twig:log(err, "ERROR: ~p", [Reason]),
     {error, Reason}.
 
 
