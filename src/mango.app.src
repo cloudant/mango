@@ -5,8 +5,8 @@
     {applications, [
         kernel,
         stdlib,
+        couch_log,
         config,
-        twig,
         fabric
     ]}
 ]}.
