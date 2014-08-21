@@ -113,20 +113,75 @@ get_index_entries({IdxProps}, Doc) ->
         false ->
             [[Values, null]]
     end.
-    
+
 
 get_text_entries({IdxProps}, Doc) ->
     Fields = couch_util:get_value(<<"fields">>, IdxProps),
-    Values = lists:map(fun(Field) ->
-        case mango_doc:get_field(Doc, Field) of
+    Results = lists:map(fun(Field) -> 
+    FieldName = get_textfield_name(Field),
+    Values = get_textfield_values(Doc,Field),
+    Store = get_textfield_opts(Field,"<<store>>"),
+    Index = get_textfield_opts(Field,"<<index>>"),
+    Facet = get_textfield_opts(Field,"<<facet>>"),
+        case Values of 
             not_found -> not_found;
-            bad_path -> not_found;
-            Else -> [Field, Else,[{<<"store">>,true}]]
+            [] -> not_found;
+            _ -> [FieldName, list_to_binary(io_lib:format("~p", [Values])), [{<<"store">>,Store}, {<<"index">>,Index},{"<<facet>>",Facet}]]
         end
     end, Fields),
-    case lists:member(not_found, Values) of
+    case lists:member(not_found, Results) of
         true ->
             [];
         false ->
-            Values
+            Results
     end.
+
+
+get_textfield_name({[{FieldName,_}]}) ->
+    FieldName;
+get_textfield_name(Field) ->
+    Field.
+
+
+get_textfield_values(Doc,{[{FieldName,{FieldOpts}}]}) ->
+    DocFields = case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
+        [] -> [FieldName];
+        undefined -> [FieldName];
+        Else -> Else 
+    end,
+    Values = lists:map(fun(SubField) ->
+        get_textfield_values(Doc,SubField)
+    end,DocFields),
+    case lists:member(not_found,Values) of 
+            true-> [];
+            false -> Values
+        end;
+get_textfield_values(Doc,Field) ->
+    case mango_doc:get_field(Doc, Field) of
+        not_found -> not_found;
+        bad_path -> not_found;
+        Else -> Else  
+    end.
+
+
+get_textfield_opts({[{_,{FieldOpts}}]},Option) ->
+     case Option of
+        <<"store">> -> couch_util:get_value(<<"store">>,FieldOpts,<<"false">>);
+        <<"index">> -> couch_util:get_value(<<"index">>,FieldOpts,<<"true">>);
+        <<"facet">> -> couch_util:get_value(<<"facet">>,FieldOpts,<<"false">>);
+        _->undefined_textfield_option
+    end;
+get_textfield_opts(_,Option) ->
+    %return defaults when no options are provided
+    case Option of
+        <<"store">> -> <<"false">>;
+        <<"index">> -> <<"true">>;
+        <<"face">> -> <<"false">>;
+        _->undefined_textfield_option
+    end.
+
+
+    
+
+ 
+
