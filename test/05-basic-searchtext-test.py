@@ -17,7 +17,7 @@ def test_create_text_idx_01():
     db = mkdb()
     fields = ["foo", "bar"]
     analyzer = "standard"
-    ret = db.create_text_index(fields, analyzer, name="text_idx_01")
+    ret = db.create_text_index(fields, analyzer,{},name="text_idx_01")
     assert ret is True
     for idx in db.list_indexes():
         if idx["name"] != "text_idx_01":
@@ -40,7 +40,7 @@ def test_create_text_no_sub_fields():
         }
     ]
     analyzer = "standard"
-    ret = db.create_text_index(fields, analyzer, name="text_idx_02")
+    ret = db.create_text_index(fields, analyzer,{}, name="text_idx_02")
     assert ret is True
     for idx in db.list_indexes():
         if idx["name"] != "text_idx_02":
@@ -70,7 +70,7 @@ def test_create_text_sub_fields():
             }
         }]
     analyzer = "standard"
-    ret = db.create_text_index(fields, analyzer, name="text_idx_03")
+    ret = db.create_text_index(fields, analyzer,{}, name="text_idx_03")
     assert ret is True
     for idx in db.list_indexes():
         if idx["name"] != "text_idx_03":
@@ -105,13 +105,13 @@ def test_create_text_with_analyzer():
             "names": "spanish"
         }
     }]
-    ret = db.create_text_index(fields, analyzer, name="text_idx_04")
+    ret = db.create_text_index(fields, analyzer,{}, name="text_idx_04")
     assert ret is True
     for idx in db.list_indexes():
         if idx["name"] != "text_idx_04":
             continue
         assert idx["type"] == "text"
-        assert idx["analyzer"] == [{ 
+        assert idx["def"]["analyzer"] == [{ 
         "name": "perfield",
         "default": "english",
         "fields": {
@@ -126,5 +126,52 @@ def test_create_text_with_analyzer():
                 "facet": "true"
             }
         }]
+        return
+    raise AssertionError("index not created")
+
+
+def test_create_text_with_selector_analyzer():
+    db = mkdb()
+    fields = [{
+            "names": {
+                "doc_fields" : ["names.first","names.last"],
+                "store": "true",
+                "index": "false",
+                "facet": "true"
+            }
+        }]
+    analyzer =  [{ 
+        "name": "perfield",
+        "default": "english",
+        "fields": {
+            "names": "spanish"
+        }
+    }]
+    selector = {"age": {"$lt": 35}}
+
+    ret = db.create_text_index(fields, analyzer, selector,name="text_idx_05")
+    assert ret is True
+    for idx in db.list_indexes():
+        if idx["name"] != "text_idx_05":
+            continue
+        assert idx["type"] == "text"
+        assert idx["def"]["analyzer"] == [{ 
+        "name": "perfield",
+        "default": "english",
+        "fields": {
+            "names": "spanish"
+            }
+        }]
+        assert idx["def"]["fields"] == [{
+            "names": {
+                "doc_fields" : ["names.first","names.last"],
+                "store": "true",
+                "index": "false",
+                "facet": "true"
+            }
+        }]
+        print "Selector"
+        print idx["def"]
+        assert idx["def"]["selector"] == {"age": {"$lt": 35}}
         return
     raise AssertionError("index not created")

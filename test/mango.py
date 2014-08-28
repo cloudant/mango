@@ -77,14 +77,15 @@ class Database(object):
         r.raise_for_status()
         return r.json()["result"] == "created"
     
-    def create_text_index(self, fields, analyzer, idx_type="text", name=None, ddoc=None):
+    def create_text_index(self, fields, analyzer, selector, idx_type="text", name=None, ddoc=None):
         body = {
             "index": {
-                "fields": fields
+                "analyzer": analyzer,
+                "fields": fields,
+                "selector" : selector
             },
             "type": idx_type,
             "w": 3,
-            "analyzer": analyzer
         }
         if name is not None:
             body["name"] = name

@@ -57,14 +57,12 @@ from_ddoc({Props}) ->
         {<<"indexes">>, {Texts}} when is_list(Texts) ->
             lists:flatmap(fun({Name, {VProps}}) ->
                 Def = proplists:get_value(<<"index">>, VProps),
-                Alyzer = proplists:get_value(<<"analyzer">>, VProps),
                 {Opts0} = proplists:get_value(<<"options">>, VProps),
                 Opts = lists:keydelete(<<"sort">>, 1, Opts0),
                 I = #idx{
                     type = <<"text">>,
                     name = Name,
                     def = Def,
-                    analyzer = Alyzer,
                     opts = Opts
                 },
                 % TODO: Validate the index definition
@@ -80,8 +78,7 @@ to_json(Idx) ->
         {ddoc, Idx#idx.ddoc},
         {name, Idx#idx.name},
         {type, Idx#idx.type},
-        {def, {def_to_json(Idx#idx.def)}},
-        {analyzer, Idx#idx.analyzer}
+        {def, {def_to_json(Idx#idx.def)}}
     ]}.
 
 columns(Idx) ->
@@ -114,7 +111,19 @@ opts() ->
         {<<"fields">>, [
             {tag, fields},
             {validator, fun mango_opts:validate_fields/1}
+        ]},
+        {<<"analyzer">>, [
+            {tag, analyzer},
+            {optional, true},
+            {default,<<"standard">>}
+        ]},
+         {<<"selector">>, [
+            {tag, selector},
+            {optional, true},
+            {default,{[]}},
+            {validator, fun mango_opts:validate_selector/1}
         ]}
+
       
     ].
 
@@ -122,7 +131,6 @@ opts() ->
 make_text(Idx) ->
     Text= {[
         {<<"index">>, Idx#idx.def},
-        {<<"analyzer">>, Idx#idx.analyzer},
         {<<"options">>, {Idx#idx.opts}}
     ]},
     {Idx#idx.name, Text}.

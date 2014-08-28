@@ -55,14 +55,14 @@ new(Db, Opts) ->
     Type = get_idx_type(Opts),
     IdxName = get_idx_name(Def, Opts),
     DDoc = get_idx_ddoc(Def, Opts),
-    Alyzer = get_idx_alyzer(Opts),
+    %Alyzer = get_idx_alyzer(Opts),
     {ok, #idx{
         dbname = db_to_name(Db),
         ddoc = DDoc,
         name = IdxName,
         type = Type,
         def = Def,
-        analyzer=Alyzer,
+        %analyzer=Alyzer,
         opts = filter_opts(Opts)
     }}.
 
@@ -144,8 +144,8 @@ opts(#idx{opts=Opts}) ->
     Opts.
 
 
-alyzer(#idx{analyzer=Alyzer}) ->
-    Alyzer.
+%alyzer(#idx{analyzer=Alyzer}) ->
+ %   Alyzer.
 
 
 to_json(#idx{}=Idx) ->
@@ -233,13 +233,13 @@ get_idx_name(Idx, Opts) ->
     end.
 
 
-get_idx_alyzer(Opts) ->
-    case proplists:get_value(analyzer, Opts) of
-       undefined ->
-            <<"standard">>;
-        Alyzer ->
-            Alyzer
-    end.
+% get_idx_alyzer(Opts) ->
+%     case proplists:get_value(analyzer, Opts) of
+%        undefined ->
+%             <<"standard">>;
+%         Alyzer ->
+%             Alyzer
+%     end.
 
 
 gen_name(Idx, Opts0) ->

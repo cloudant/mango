@@ -115,7 +115,12 @@ get_index_entries({IdxProps}, Doc) ->
     end.
 
 
-get_text_entries({IdxProps}, Doc) ->
+get_text_entries({IdxProps}, Doc0) ->
+    Selector = case couch_util:get_value(<<"selector">>,IdxProps) of
+        [] -> {[]};
+        Else -> Else
+    end,
+    Doc = filter_doc(Selector,Doc0),
     Fields = couch_util:get_value(<<"fields">>, IdxProps),
     Results = lists:map(fun(Field) -> 
     FieldName = get_textfield_name(Field),
@@ -135,6 +140,14 @@ get_text_entries({IdxProps}, Doc) ->
         false ->
             Results
     end.
+
+filter_doc(Selector0,Doc) ->
+    Selector = mango_selector:normalize(Selector0),
+    case mango_selector:match(Selector,Doc) of
+        true -> Doc;
+        false -> []
+    end.
+
 
 
 get_textfield_name({[{FieldName,_}]}) ->
