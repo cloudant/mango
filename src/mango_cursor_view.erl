@@ -70,14 +70,13 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
         user_fun = UserFun,
         user_acc = UserAcc
     },
-
     case Cursor#cursor.ranges of
         [empty] ->
             % empty indicates unsatisfiable ranges, so don't perform search
             {ok, UserAcc};
         _ ->
             BaseArgs = #mrargs{
-                view_type = red_map,
+                reduce = false,
                 start_key = mango_idx:start_key(Idx, Cursor#cursor.ranges),
                 end_key = mango_idx:end_key(Idx, Cursor#cursor.ranges),
                 include_docs = true
@@ -148,6 +147,8 @@ choose_best_index(_DbName, IndexRanges) ->
 
 handle_message({total_and_offset, _, _} = _TO, Cursor) ->
     {ok, Cursor};
+handle_message({meta, _}, Cursor) ->
+    {ok, Cursor};
 handle_message({row, {Props}}, Cursor) ->
     case doc_member(Cursor#cursor.db, Props, Cursor#cursor.opts) of
         {ok, Doc} ->
@@ -162,6 +163,8 @@ handle_message({row, {Props}}, Cursor) ->
             couch_log:error("~s :: Error loading doc: ~p", [?MODULE, Error]),
             {ok, Cursor}
     end;
+handle_message({row, Props}, Cursor) when is_list(Props) ->
+    handle_message({row, {Props}}, Cursor);
 handle_message(complete, Cursor) ->
     {ok, Cursor};
 handle_message({error, Reason}, _Cursor) ->
