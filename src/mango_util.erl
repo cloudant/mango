@@ -26,7 +26,7 @@
 
 
 open_doc(Db, DocId) ->
-    Opts = [deleted],
+    Opts = [deleted, ejson_body],
     case mango_util:defer(fabric, open_doc, [Db, DocId, Opts]) of
         {ok, Doc} ->
             {ok, Doc};
