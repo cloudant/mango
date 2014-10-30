@@ -81,11 +81,19 @@ to_json(Idx) ->
         {def, {def_to_json(Idx#idx.def)}}
     ]}.
 
+
 columns(Idx) ->
     {Props} = Idx#idx.def,
-    {<<"fields">>, {Fields}} = lists:keyfind(<<"fields">>, 1, Props),
-    [Key || {Key, _} <- Fields].
-
+    {<<"fields">>,Fields}=lists:keyfind(<<"fields">>, 1, Props),
+    lists:map(fun(Field) ->
+        case Field of
+            B when is_binary(B) ->
+                B;
+            {[{Key,_}]} ->
+                Key
+        end
+    end,Fields).
+    
 
 do_validate({Props}) ->
     {ok, Opts} = mango_opts:validate(Props, opts()),
@@ -130,7 +138,26 @@ opts() ->
 
 make_text(Idx) ->
     Text= {[
-        {<<"index">>, Idx#idx.def},
+        {<<"index">>, add_default_field(Idx#idx.def)},
+        %%options also has a list of fields. we don't add a default field
+        %%because we don't reference it during index creation or search
+        %%this may change later?
         {<<"options">>, {Idx#idx.opts}}
     ]},
     {Idx#idx.name, Text}.
+
+%%Add Default Field that has value equal to all user provided fields in def
+add_default_field({[{fields,Fields},Analyzer,Selector]}) ->
+    FinalFields=lists:foldl(fun ({[{FieldName,{FieldOpts}}]},FieldsAcc) -> 
+        case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
+            [] -> FieldsAcc++[FieldName];
+            undefined -> FieldsAcc++[FieldName];
+            Else -> FieldsAcc++Else
+        end
+    end,[],Fields),
+    DefaultField = {[{<<"default">>,
+                        {[{<<"facet">>,<<"true">>},
+                        {<<"index">>,<<"false">>},
+                        {<<"doc_fields">>,FinalFields},
+                        {<<"store">>,<<"true">>}]}}]},
+    {[{fields,[DefaultField|Fields]},Analyzer,Selector]}.

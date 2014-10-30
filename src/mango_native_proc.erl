@@ -122,16 +122,20 @@ get_text_entries({IdxProps}, Doc0) ->
     end,
     Doc = filter_doc(Selector,Doc0),
     Fields = couch_util:get_value(<<"fields">>, IdxProps),
+    %twig:log(notice,"Fields~p", [Fields]),
     Results = lists:map(fun(Field) -> 
     FieldName = get_textfield_name(Field),
-    Values = get_textfield_values(Doc,Field),
+    %twig:log(notice,"FieldName~p", [FieldName]),
+    Values0 = get_textfield_values(Doc,Field),
+    Values1 = format_text_values(Values0),
+    twig:log(notice, "Value Results~p", [Values1]),
     Store = get_textfield_opts(Field,"<<store>>"),
     Index = get_textfield_opts(Field,"<<index>>"),
     Facet = get_textfield_opts(Field,"<<facet>>"),
-        case Values of 
+        case Values1 of 
             not_found -> not_found;
             [] -> not_found;
-            _ -> [FieldName, list_to_binary(io_lib:format("~p", [Values])), [{<<"store">>,Store}, {<<"index">>,Index},{"<<facet>>",Facet}]]
+            _ -> [FieldName, Values1, [{<<"store">>,Store}, {<<"index">>,Index},{"<<facet>>",Facet}]]
         end
     end, Fields),
     case lists:member(not_found, Results) of
@@ -140,6 +144,49 @@ get_text_entries({IdxProps}, Doc0) ->
         false ->
             Results
     end.
+
+%% Modify text values that will be sent to the dreyfus API
+%% If it is a single array value, then we send in the type if it's a string, number, or boolean
+%% If it is an array of values, we combine all values into a single string
+
+format_text_values(Values) when is_list(Values) ->
+    Results = lists:map(fun (Val) -> 
+        format_text_values(Val)
+    end,Values),
+    twig:log(notice, "Multi Results~p", [Results]),
+    case length(Results) of
+        0 ->
+            [];
+        1 -> 
+            [Val|_] = Results,
+            Val;
+        _ -> %% Combine all the binaries together as one field value to send to dreyfus
+            %%Separated by whitespace(for tokenization), so [<"A">>,<<"B">>,<<"C">> becomes] <<" A B C">>
+            lists:foldl(fun(Val,Acc) -> Bin=to_bin(Val),<<Acc/binary," ",Bin/binary>> end,<<>>,Results)
+    end;
+format_text_values(Values) when is_tuple(Values) ->
+    format_text_values(tuple_to_list(Values)); 
+format_text_values(Values) when is_number(Values); is_boolean(Values); is_binary(Values)  ->
+    Values;
+%%Should we through an error instead here?
+format_text_values(_) ->
+    [].
+
+
+to_bin(Val) when is_binary(Val) ->
+    Val;
+to_bin(Val) when is_integer(Val) ->
+    list_to_binary(integer_to_list(Val));
+to_bin(Val) when is_float(Val) ->
+    list_to_binary(float_to_list(Val));
+to_bin(Val) when is_boolean(Val) ->
+    case Val  of
+        true -> <<"true">>;
+        false -> <<"false">>
+    end;
+to_bin(_)->
+    []. 
+
 
 filter_doc(Selector0,Doc) ->
     Selector = mango_selector:normalize(Selector0),
@@ -157,6 +204,7 @@ get_textfield_name(Field) ->
 
 
 get_textfield_values(Doc,{[{FieldName,{FieldOpts}}]}) ->
+   % twig:log(notice, "FieldOpts ~p", [FieldOpts]),
     DocFields = case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
         [] -> [FieldName];
         undefined -> [FieldName];

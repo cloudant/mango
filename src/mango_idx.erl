@@ -7,6 +7,7 @@
 
 -export([
     list/1,
+    filter_list/2,
 
     new/2,
     validate/1,
@@ -48,6 +49,16 @@ list(Db) ->
     Special ++ lists:flatmap(fun(Doc) ->
         from_ddoc(Db, Doc)
     end, DDocs).
+
+%%Filter our index list based on the types provided
+filter_list(Indexes,Types) ->
+    Pred = fun (Index) ->
+        case lists:member(Index#idx.type,Types) of
+            true -> true;
+            _ -> false
+        end
+    end,
+    lists:filter(Pred,Indexes).
 
 
 new(Db, Opts) ->

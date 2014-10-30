@@ -4,6 +4,7 @@
 -export([
     normalize/1,
     index_fields/1,
+    index_cursor_type/1,
     range/2,
     match/2
 ]).
@@ -170,6 +171,15 @@ norm_ops({[{<<"$size">>, Arg}]}) when is_integer(Arg), Arg >= 0 ->
 norm_ops({[{<<"$size">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$size', Arg});
 
+norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg)->
+    {[{<<"$text">>, Arg}]};
+norm_ops({[{<<"$text">>, Arg}]}) when is_number(Arg)->
+    {[{<<"$text">>, Arg}]};
+norm_ops({[{<<"$text">>, Arg}]}) when is_boolean(Arg)->
+    {[{<<"$text">>, Arg}]};
+norm_ops({[{<<"$text">>, Arg}]}) ->
+    ?MANGO_ERROR({bad_arg, '$text', Arg});
+
 % Terminals where we can't perform any validation
 % on the value because any value is acceptable.
 norm_ops({[{<<"$lt">>, _}]} = Cond) ->
@@ -261,6 +271,11 @@ norm_fields({[{<<"$nor">>, Args}]}, Path) ->
 norm_fields({[{<<"$elemMatch">>, Arg}]}, Path) ->
     Cond = {[{<<"$elemMatch">>, norm_fields(Arg)}]},
     {[{Path, Cond}]};
+
+%%This is the case when the user doesn't specify a field, we add
+%%the <<"default">> field
+norm_fields({[{<<"$text">>, _}]}=Cond, <<>>) ->
+    {[{<<"default">>, Cond}]};
 
 % Any other operator is a terminal below which no
 % field names should exist. Set the path to this
@@ -411,12 +426,21 @@ indexable({[{<<"$gt">>, _}]}) ->
     true;
 indexable({[{<<"$gte">>, _}]}) ->
     true;
+indexable({[{<<"$text">>, _}]}) ->
+    true;
 
 % All other operators are currently not indexable.
 % This is also a subtle assertion that we don't
 % call indexable/1 on a field name.
 indexable({[{<<"$", _/binary>>, _}]}) ->
     false.
+
+%%Checks to see if the selector is using a $text operator.
+%%Return a cursor_text for text cursor.
+index_cursor_type({[{_,{[{<<"$text">>,_}]}}]}) ->
+    mango_cursor_text;
+index_cursor_type(_)->
+    mango_cursor_view.
 
 
 % Adjust Low and High based on values found for the
