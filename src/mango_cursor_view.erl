@@ -23,9 +23,8 @@ create(Db, Selector, Opts) ->
     end,
 
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"json">>,<<"special">>]),
-    twig:log(notice, "ExistingIndexes ~p", [ExistingIndexes]),
     UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
-    SortIndexes = get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
+    SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
 
     Composited = composite_indexes(SortIndexes, FieldRanges),
     {Index, Ranges} = choose_best_index(Db, Composited),
@@ -73,7 +72,6 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
 
 % Find the intersection between the Possible and Existing
 % indexes.
-
 find_usable_indexes([], _) ->
     ?MANGO_ERROR({no_usable_index, query_unsupported});
 find_usable_indexes(Possible, []) ->
@@ -93,42 +91,6 @@ find_usable_indexes(Possible, Existing) ->
     end,
     Usable.
 
-
-get_sort_indexes(ExistingIndexes, UsableIndexes, Opts) ->
-    % If a sort was specified we have to find an index that
-    % can satisfy the request.
-    case lists:keyfind(sort, 1, Opts) of
-        {sort, {[_ | _]} = Sort} ->
-            limit_to_sort(ExistingIndexes, UsableIndexes, Sort);
-        _ ->
-            UsableIndexes
-    end.
-
-
-limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
-    Fields = mango_sort:fields(Sort),
-
-    % First make sure that we have an index that could
-    % answer this sort. We split like this so that the
-    % user error is more obvious.
-    SortFilt = fun(Idx) ->
-        Cols = mango_idx:columns(Idx),
-        lists:prefix(Fields, Cols)
-    end,
-    SortIndexes = lists:filter(SortFilt, ExistingIndexes),
-    if SortIndexes /= [] -> ok; true ->
-        ?MANGO_ERROR({no_usable_index, {sort, Fields}})
-    end,
-
-    % And then check if one or more of our SortIndexes
-    % is usable.
-    UsableFilt = fun(Idx) -> lists:member(Idx, UsableIndexes) end,
-    FinalIndexes = lists:filter(UsableFilt, SortIndexes),
-    if FinalIndexes /= [] -> ok; true ->
-        ?MANGO_ERROR({no_usable_index, sort_field})
-    end,
-
-    FinalIndexes.
 
 
 % For each field, return {Field, Range}

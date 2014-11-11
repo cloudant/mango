@@ -21,7 +21,8 @@ create(Db, Selector, Opts) ->
 
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields,ExistingIndexes),
-    Index = hd(UsableIndexes),
+    SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
+    Index = hd(SortIndexes),
     Limit = couch_util:get_value(limit, Opts, 50),
     %%The default passed in from Opts is 10000000000, which dreyfus will not accept
     %%For now, we cap it at 50
@@ -43,14 +44,17 @@ create(Db, Selector, Opts) ->
         fields = Fields
     }}.
 
-execute(#cursor{db = Db, index = Idx,limit=Limit} = Cursor0, UserFun, UserAcc) ->
+execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, UserAcc) ->
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
+    SearchQuery = parse_selector(Cursor0#cursor.selector),
+    SortQuery = sort_query(Opts),
     QueryArgs = #index_query_args{
-        q = parse_selector(Cursor0#cursor.selector),
+        q = SearchQuery,
         include_docs = true,
-        limit = trunc(Limit)
+        limit = Limit,
+        sort=SortQuery
     },
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, Bookmark0, TotalHits, Hits0} -> % legacy clause
@@ -68,6 +72,19 @@ execute(#cursor{db = Db, index = Idx,limit=Limit} = Cursor0, UserFun, UserAcc) -
                 {Resp1, ",\r\n"}
                end, UserAcc,Hits)}
     end.
+
+%% Query For Dreyfus Sort, Covert <<"Field">>,<<"desc">> to <<"-Field">>
+sort_query(Opts) ->
+   {sort, {Sort}} = lists:keyfind(sort, 1, Opts),
+   lists:map(fun(SortField) -> 
+        {Field,Dir} = SortField,
+        case Dir of
+            <<"asc">> -> Field;
+            <<"desc">> -> <<"-",Field/binary>>;
+            _ -> Field
+        end
+   end,Sort).
+
 
 ddocid(Idx) ->
     case mango_idx:ddoc(Idx) of
@@ -112,3 +129,4 @@ find_usable_indexes(Possible, Existing) ->
         ?MANGO_ERROR({no_usable_index, {fields, Possible}})
     end,
     Usable.
+
