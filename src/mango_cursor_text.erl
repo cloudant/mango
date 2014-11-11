@@ -21,10 +21,14 @@ create(Db, Selector, Opts) ->
 
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields,ExistingIndexes),
-    %twig:log(notice,"UsableIndexes: ~p", UsableIndexes),
-    %% Just choose first index for now. 
     Index = hd(UsableIndexes),
-    Limit = couch_util:get_value(limit, Opts, 10000000000),
+    Limit = couch_util:get_value(limit, Opts, 50),
+    %%The default passed in from Opts is 10000000000, which dreyfus will not accept
+    %%For now, we cap it at 50
+    CapLimit = case Limit > 50 of 
+        true -> 50;  %% Should we throw an error instead?
+        false -> Limit
+    end,
     Skip = couch_util:get_value(skip, Opts, 0),
     Fields = couch_util:get_value(fields, Opts, all_fields),
 
@@ -34,22 +38,20 @@ create(Db, Selector, Opts) ->
         ranges = null,
         selector = Selector,
         opts = Opts,
-        limit = Limit,
+        limit = CapLimit,
         skip = Skip,
         fields = Fields
     }}.
 
-execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
+execute(#cursor{db = Db, index = Idx,limit=Limit} = Cursor0, UserFun, UserAcc) ->
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
-    twig:log(notice,"IndexName: ~p", [IndexName]),
-
     QueryArgs = #index_query_args{
         q = parse_selector(Cursor0#cursor.selector),
-        include_docs = true
+        include_docs = true,
+        limit = trunc(Limit)
     },
-
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, Bookmark0, TotalHits, Hits0} -> % legacy clause
             Hits = dreyfus_util:hits_to_json(DbName, true, Hits0),
