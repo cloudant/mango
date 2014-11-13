@@ -16,8 +16,9 @@
 -define(SUPERVISOR, mango_cursor_sup).
 
 create(Db, Selector0, Opts) ->
-    Selector = mango_selector:normalize(Selector0),
-    Mod = mango_selector:index_cursor_type(Selector),
+    % twig:log(notice, "Selector0~p",[Selector0]),
+    Mod = mango_opts:index_cursor_type(Selector0),
+    % twig:log(notice, "Cursor Type ~p",[Mod]),
     Mod:create(Db,Selector0,Opts).
 
 

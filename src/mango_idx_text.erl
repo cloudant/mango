@@ -99,7 +99,7 @@ do_validate({Props}) ->
     {ok, Opts} = mango_opts:validate(Props, opts()),
     {ok, {Opts}};
 do_validate(Else) ->
-    ?MANGO_ERROR({invalid_index_json, Else}).
+    ?MANGO_ERROR({invalid_index_text, Else}).
 
 
 def_to_json({Props}) ->
@@ -131,8 +131,6 @@ opts() ->
             {default,{[]}},
             {validator, fun mango_opts:validate_selector/1}
         ]}
-
-      
     ].
 
 
@@ -146,18 +144,25 @@ make_text(Idx) ->
     ]},
     {Idx#idx.name, Text}.
 
-%%Add Default Field that has value equal to all user provided fields in def
+
 add_default_field({[{fields,Fields},Analyzer,Selector]}) ->
-    FinalFields=lists:foldl(fun ({[{FieldName,{FieldOpts}}]},FieldsAcc) -> 
-        case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
-            [] -> FieldsAcc++[FieldName];
-            undefined -> FieldsAcc++[FieldName];
-            Else -> FieldsAcc++Else
+    FinalFields=lists:foldl(fun (Field,FieldsAcc) ->
+        case Field of
+            {[{FieldName,{FieldOpts}}]} ->
+                case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
+                    [] -> [FieldName | FieldsAcc];
+                    undefined -> [FieldName | FieldsAcc];
+                    Else -> [Else | FieldsAcc]
+                end;
+            FieldName when is_binary(FieldName) ->
+                    [FieldName | FieldsAcc];
+            FieldName ->
+                ?MANGO_ERROR({invalid_index_type, FieldName})
         end
     end,[],Fields),
     DefaultField = {[{<<"default">>,
-                        {[{<<"facet">>,<<"true">>},
-                        {<<"index">>,<<"false">>},
+                        {[{<<"facet">>,false},
+                        {<<"index">>,true},
                         {<<"doc_fields">>,FinalFields},
-                        {<<"store">>,<<"true">>}]}}]},
+                        {<<"store">>,false}]}}]},
     {[{fields,[DefaultField|Fields]},Analyzer,Selector]}.

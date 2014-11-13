@@ -13,7 +13,8 @@
 -include("mango_cursor.hrl").
 -include("mango.hrl").
 
-create(Db, Selector, Opts) ->
+create(Db, Selector0, Opts) ->
+    Selector = mango_selector:normalize(Selector0),
     IndexFields = mango_selector:index_fields(Selector),  
     %twig:log(notice, "IndexFields ~p",[IndexFields]), 
     FieldRanges = find_field_ranges(Selector, IndexFields),

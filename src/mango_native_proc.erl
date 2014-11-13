@@ -129,13 +129,13 @@ get_text_entries({IdxProps}, Doc0) ->
     Values0 = get_textfield_values(Doc,Field),
     Values1 = format_text_values(Values0),
     twig:log(notice, "Value Results~p", [Values1]),
-    Store = get_textfield_opts(Field,"<<store>>"),
-    Index = get_textfield_opts(Field,"<<index>>"),
-    Facet = get_textfield_opts(Field,"<<facet>>"),
+    Store = get_textfield_opts(Field,<<"store">>),
+    Index = get_textfield_opts(Field,<<"index">>),
+    Facet = get_textfield_opts(Field,<<"facet">>),
         case Values1 of 
             not_found -> not_found;
             [] -> not_found;
-            _ -> [FieldName, Values1, [{<<"store">>,Store}, {<<"index">>,Index},{"<<facet>>",Facet}]]
+            _ -> [FieldName, Values1, [{<<"store">>,Store}, {<<"index">>,Index},{<<"facet">>,Facet}]]
         end
     end, Fields),
     case lists:member(not_found, Results) of
@@ -153,7 +153,7 @@ format_text_values(Values) when is_list(Values) ->
     Results = lists:map(fun (Val) -> 
         format_text_values(Val)
     end,Values),
-    twig:log(notice, "Multi Results~p", [Results]),
+    %twig:log(notice, "Multi Results~p", [Results]),
     case length(Results) of
         0 ->
             [];
@@ -226,18 +226,23 @@ get_textfield_values(Doc,Field) ->
 
 
 get_textfield_opts({[{_,{FieldOpts}}]},Option) ->
-     case Option of
-        <<"store">> -> couch_util:get_value(<<"store">>,FieldOpts,<<"false">>);
-        <<"index">> -> couch_util:get_value(<<"index">>,FieldOpts,<<"true">>);
-        <<"facet">> -> couch_util:get_value(<<"facet">>,FieldOpts,<<"false">>);
+     %twig:log(notice,"Option1 ~p",[Option]),
+     twig:log(notice,"FieldsOpts~p",[FieldOpts]),
+     Result =case Option of
+        <<"store">> -> couch_util:get_value(<<"store">>,FieldOpts,false);
+        <<"index">> -> couch_util:get_value(<<"index">>,FieldOpts,true);
+        <<"facet">> -> couch_util:get_value(<<"facet">>,FieldOpts,false);
         _->undefined_textfield_option
-    end;
+    end,
+     twig:log(notice,"Option ~p, Result ~p",[Option,Result]),
+     Result;
 get_textfield_opts(_,Option) ->
     %return defaults when no options are provided
+    %twig:log(notice,"Option2 ~p",[Option]),
     case Option of
-        <<"store">> -> <<"false">>;
-        <<"index">> -> <<"true">>;
-        <<"face">> -> <<"false">>;
+        <<"store">> -> false;
+        <<"index">> -> true;
+        <<"face">> -> false;
         _->undefined_textfield_option
     end.
 
