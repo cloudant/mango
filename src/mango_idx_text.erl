@@ -94,7 +94,6 @@ columns(Idx) ->
         end
     end,Fields).
     
-
 do_validate({Props}) ->
     {ok, Opts} = mango_opts:validate(Props, opts()),
     {ok, {Opts}};
@@ -152,7 +151,7 @@ add_default_field({[{fields,Fields},Analyzer,Selector]}) ->
                 case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
                     [] -> [FieldName | FieldsAcc];
                     undefined -> [FieldName | FieldsAcc];
-                    Else -> [Else | FieldsAcc]
+                    Else -> lists:append(FieldsAcc,Else)
                 end;
             FieldName when is_binary(FieldName) ->
                     [FieldName | FieldsAcc];

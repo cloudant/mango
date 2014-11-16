@@ -14,17 +14,20 @@
 
 create(Db, Selector0, Opts) ->
     Selector = mango_text_selector:normalize(Selector0),
+    twig:log(notice, "Opts: ~p",[Opts]),
+  
     Fields = case couch_util:get_value(fields, Opts, all_fields) of
         all_fields -> [];
         Else -> Else
     end,
     IndexFields = [<<"default">> | Fields ],
-    twig:log(notice,"IndexFields~p",[IndexFields]),
-
+    twig:log(notice, "Index Fields Passed in, should be same as Possible: ~p",[IndexFields]),
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields,ExistingIndexes),
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
+    twig:log(notice, "Sort Indexes: ~p",[SortIndexes]),
     Index = choose_best_index(SortIndexes,IndexFields),
+    % twig:log(notice, "Index: ~p",[Index]),
     Limit = couch_util:get_value(limit, Opts, 50),
     %%The default passed in from Opts is 10000000000, which dreyfus will not accept
     %%For now, we cap it at 50
@@ -56,10 +59,11 @@ execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, 
         limit = Limit,
         sort=SortQuery
     },
-    % twig:log(notice,"Counts~p",[QueryArgs#index_query_args.counts]),
+    twig:log(notice,"********************Index Name*************************\n~p",[IndexName]),
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, Bookmark0, TotalHits, Hits0, Counts0, Ranges0} ->
             Hits = hits_to_json(DbName, true, Hits0),
+            twig:log(notice,"Hits~p",[Hits]),
             Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark0),
             Counts = case Counts0 of
                         undefined ->
@@ -128,6 +132,7 @@ parse_selector({[{<<"$text">>,Value}]}) when is_boolean(Value) ->
 
 %With Options
 parse_selector({[{<<"$text">>,Value},Opts]}) when is_binary(Value) ->
+    twig:log(notice, "Query Value: ~p",[Value]),
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = Value};
 parse_selector({[{<<"$text">>,Value},Opts]}) when is_integer(Value) ->
@@ -174,17 +179,18 @@ parse_option({Option,_},_) ->
 find_usable_indexes([], _) ->
     ?MANGO_ERROR({no_usable_index, query_unsupported});
 find_usable_indexes(Possible, []) ->
-    twig:log(notice, "Possible find usable ~p", [Possible]),
     ?MANGO_ERROR({no_usable_index, {fields, Possible}});
 find_usable_indexes(Possible, Existing) ->
     Usable = lists:foldl(fun(Idx, Acc) ->
         Columns = mango_idx:columns(Idx),
         %% Check to see if any of the Columns exist in our Possible Fields
-        case sets:is_disjoint(sets:from_list(Columns),sets:from_list(Possible)) of
+        twig:log(notice, "Columns find usable ~p", [Columns]),
+        twig:log(notice, "Possible find usable ~p", [Possible]),
+        case sets:is_subset(sets:from_list(Possible),sets:from_list(Columns)) of
             true ->
-                Acc;
+                [Idx | Acc];
             false ->
-                [Idx | Acc]
+                Acc
         end
     end, [], Existing),
     if length(Usable) > 0 -> ok; true ->
@@ -194,19 +200,18 @@ find_usable_indexes(Possible, Existing) ->
 
 %% If no field list exists, we choose the default field with the most
 %% sub fields indexed, otherwise just choose the first one
-choose_best_index(Indexes,IndexFields) ->
+choose_best_index(Indexes,IndexFields) -> 
     case IndexFields of
         [<<"default">>] ->
-            twig:log(notice, "Indexes~p", [Indexes]),
             lists:foldl(fun(Idx, Acc) ->
-                PrevLen = length(Acc),
+                PrevLen = length(mango_idx:columns(Acc)),
                 case length(mango_idx:columns(Idx)) of
                     Len when Len >= PrevLen ->
                         Idx;
                     _ ->
                         Acc
                 end
-            end, [], Indexes);
+            end, hd(Indexes), Indexes);
         _ ->
             hd(Indexes)
     end.

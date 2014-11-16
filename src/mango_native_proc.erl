@@ -227,7 +227,7 @@ get_textfield_values(Doc,Field) ->
 
 get_textfield_opts({[{_,{FieldOpts}}]},Option) ->
      %twig:log(notice,"Option1 ~p",[Option]),
-     twig:log(notice,"FieldsOpts~p",[FieldOpts]),
+     % twig:log(notice,"FieldsOpts~p",[FieldOpts]),
      Result =case Option of
         <<"store">> -> couch_util:get_value(<<"store">>,FieldOpts,false);
         <<"index">> -> couch_util:get_value(<<"index">>,FieldOpts,true);
