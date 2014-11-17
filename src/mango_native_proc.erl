@@ -114,7 +114,7 @@ get_index_entries({IdxProps}, Doc) ->
             [[Values, null]]
     end.
 
-
+%% Retrieves values for each field and returns it to dreyfus for indexing
 get_text_entries({IdxProps}, Doc0) ->
     Selector = case couch_util:get_value(<<"selector">>,IdxProps) of
         [] -> {[]};
@@ -122,13 +122,10 @@ get_text_entries({IdxProps}, Doc0) ->
     end,
     Doc = filter_doc(Selector,Doc0),
     Fields = couch_util:get_value(<<"fields">>, IdxProps),
-    %twig:log(notice,"Fields~p", [Fields]),
     Results = lists:map(fun(Field) -> 
     FieldName = get_textfield_name(Field),
-    %twig:log(notice,"FieldName~p", [FieldName]),
     Values0 = get_textfield_values(Doc,Field),
     Values1 = format_text_values(Values0),
-    twig:log(notice, "Value Results~p", [Values1]),
     Store = get_textfield_opts(Field,<<"store">>),
     Index = get_textfield_opts(Field,<<"index">>),
     Facet = get_textfield_opts(Field,<<"facet">>),
@@ -146,22 +143,21 @@ get_text_entries({IdxProps}, Doc0) ->
     end.
 
 %% Modify text values that will be sent to the dreyfus API
-%% If it is a single array value, then we send in the type if it's a string, number, or boolean
+%% If it is a single array value, then we send in the type: string, number, or boolean.
 %% If it is an array of values, we combine all values into a single string
-
+%% separated by whitespace(for tokenization).
+%% So [<"A">>,<<"B">>,<<"C">> becomes] <<" A B C">>
 format_text_values(Values) when is_list(Values) ->
     Results = lists:map(fun (Val) -> 
         format_text_values(Val)
     end,Values),
-    %twig:log(notice, "Multi Results~p", [Results]),
     case length(Results) of
         0 ->
             [];
         1 -> 
             [Val|_] = Results,
             Val;
-        _ -> %% Combine all the binaries together as one field value to send to dreyfus
-            %%Separated by whitespace(for tokenization), so [<"A">>,<<"B">>,<<"C">> becomes] <<" A B C">>
+        _ ->
             lists:foldl(fun(Val,Acc) -> Bin=to_bin(Val),<<Acc/binary," ",Bin/binary>> end,<<>>,Results)
     end;
 format_text_values(Values) when is_tuple(Values) ->
@@ -187,14 +183,14 @@ to_bin(Val) when is_boolean(Val) ->
 to_bin(_)->
     []. 
 
-
+%% This is used by the selector for the lucene field name
+%% to filter out documents prior to the text search
 filter_doc(Selector0,Doc) ->
     Selector = mango_selector:normalize(Selector0),
     case mango_selector:match(Selector,Doc) of
         true -> Doc;
         false -> []
     end.
-
 
 
 get_textfield_name({[{FieldName,_}]}) ->
@@ -204,7 +200,6 @@ get_textfield_name(Field) ->
 
 
 get_textfield_values(Doc,{[{FieldName,{FieldOpts}}]}) ->
-   % twig:log(notice, "FieldOpts ~p", [FieldOpts]),
     DocFields = case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
         [] -> [FieldName];
         undefined -> [FieldName];
@@ -226,19 +221,15 @@ get_textfield_values(Doc,Field) ->
 
 
 get_textfield_opts({[{_,{FieldOpts}}]},Option) ->
-     %twig:log(notice,"Option1 ~p",[Option]),
-     % twig:log(notice,"FieldsOpts~p",[FieldOpts]),
-     Result =case Option of
+    Result =case Option of
         <<"store">> -> couch_util:get_value(<<"store">>,FieldOpts,false);
         <<"index">> -> couch_util:get_value(<<"index">>,FieldOpts,true);
         <<"facet">> -> couch_util:get_value(<<"facet">>,FieldOpts,false);
         _->undefined_textfield_option
     end,
-     twig:log(notice,"Option ~p, Result ~p",[Option,Result]),
-     Result;
+    Result;
 get_textfield_opts(_,Option) ->
     %return defaults when no options are provided
-    %twig:log(notice,"Option2 ~p",[Option]),
     case Option of
         <<"store">> -> false;
         <<"index">> -> true;

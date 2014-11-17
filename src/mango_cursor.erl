@@ -16,9 +16,7 @@
 -define(SUPERVISOR, mango_cursor_sup).
 
 create(Db, Selector0, Opts) ->
-    % twig:log(notice, "Selector0~p",[Selector0]),
     Mod = mango_opts:index_cursor_type(Selector0),
-    % twig:log(notice, "Cursor Type ~p",[Mod]),
     Mod:create(Db,Selector0,Opts).
 
 
@@ -40,7 +38,6 @@ get_sort_indexes(ExistingIndexes, UsableIndexes, Opts) ->
 
 limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     Fields = mango_sort:fields(Sort),
-
     % First make sure that we have an index that could
     % answer this sort. We split like this so that the
     % user error is more obvious.
@@ -53,12 +50,10 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
                 lists:prefix(Fields, Cols)
         end
     end,
-
     SortIndexes = lists:filter(SortFilt, ExistingIndexes),
     if SortIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, {sort, Fields}})
     end,
-
     % And then check if one or more of our SortIndexes
     % is usable.
     UsableFilt = fun(Idx) -> lists:member(Idx, UsableIndexes) end,
@@ -66,5 +61,4 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     if FinalIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, sort_field})
     end,
-
     FinalIndexes.

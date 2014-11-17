@@ -14,23 +14,18 @@
 
 create(Db, Selector0, Opts) ->
     Selector = mango_text_selector:normalize(Selector0),
-    twig:log(notice, "Opts: ~p",[Opts]),
-  
     Fields = case couch_util:get_value(fields, Opts, all_fields) of
         all_fields -> [];
         Else -> Else
     end,
-    IndexFields = [<<"default">> | Fields ],
-    twig:log(notice, "Index Fields Passed in, should be same as Possible: ~p",[IndexFields]),
+    IndexFields = [<<"default">> | Fields],
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields,ExistingIndexes),
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
-    twig:log(notice, "Sort Indexes: ~p",[SortIndexes]),
     Index = choose_best_index(SortIndexes,IndexFields),
-    % twig:log(notice, "Index: ~p",[Index]),
     Limit = couch_util:get_value(limit, Opts, 50),
-    %%The default passed in from Opts is 10000000000, which dreyfus will not accept
-    %%For now, we cap it at 50
+    %% The default passed in from Opts is 10000000000, which dreyfus will not accept
+    %% For now, we cap it at 50
     CapLimit = case Limit > 50 of 
         true -> 50;  %% Should we throw an error instead?
         false -> Limit
@@ -48,35 +43,36 @@ create(Db, Selector0, Opts) ->
         fields = IndexFields
     }}.
 
+
 execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, UserAcc) ->
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
+    % Get the Query arguments and Options
     QueryArgs0 = parse_selector(Cursor0#cursor.selector),
     SortQuery = sort_query(Opts),
+    % Set limit and sort
     QueryArgs = QueryArgs0#index_query_args{
         include_docs = true,
         limit = Limit,
         sort=SortQuery
     },
-    twig:log(notice,"********************Index Name*************************\n~p",[IndexName]),
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
-        {ok, Bookmark0, TotalHits, Hits0, Counts0, Ranges0} ->
+        {ok, Bookmark0, _, Hits0, Counts0, Ranges0} ->
             Hits = hits_to_json(DbName, true, Hits0),
-            twig:log(notice,"Hits~p",[Hits]),
             Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark0),
             Counts = case Counts0 of
-                        undefined ->
-                            [];
-                        _ ->
-                            [{counts, facets_to_json(Counts0)}]
-                    end,
+                undefined ->
+                    [];
+                _ ->
+                    [{counts, facets_to_json(Counts0)}]
+            end,
             Ranges = case Ranges0 of
-                        undefined ->
-                            [];
-                        _ ->
-                        [{ranges, facets_to_json(Ranges0)}]
-                    end,
+                undefined ->
+                    [];
+                _ ->
+                    [{ranges, facets_to_json(Ranges0)}]
+            end,
             {ok, UserAcc0} = UserFun({row, {Counts}}, UserAcc),
             {ok, UserAcc1} = UserFun({row, {Ranges}}, UserAcc0),
             {ok, UserAcc2} = UserFun({row, {[{bookmark,Bookmark}]}}, UserAcc1),
@@ -86,10 +82,10 @@ execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, 
                end, UserAcc2,Hits)};
         {error, Reason} ->
             ?MANGO_ERROR({text_search_error, {error,Reason}})
-
     end.
 
 %% Query For Dreyfus Sort, Covert <<"Field">>,<<"desc">> to <<"-Field">>
+%% and append to the dreyfus query
 sort_query(Opts) ->
     {sort, {Sort}} = lists:keyfind(sort, 1, Opts),
     SortList = lists:map(fun(SortField) -> 
@@ -114,7 +110,7 @@ ddocid(Idx) ->
             Else
     end.
 
-
+%% Parse Selector when no options provided
 parse_selector({[{<<"$text">>,Value}]}) when is_binary(Value) ->
     #index_query_args{q = Value};
 parse_selector({[{<<"$text">>,Value}]}) when is_integer(Value) ->
@@ -130,9 +126,8 @@ parse_selector({[{<<"$text">>,Value}]}) when is_boolean(Value) ->
     end,
     #index_query_args{q=Query};
 
-%With Options
+% Parse Selector With Options
 parse_selector({[{<<"$text">>,Value},Opts]}) when is_binary(Value) ->
-    twig:log(notice, "Query Value: ~p",[Value]),
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = Value};
 parse_selector({[{<<"$text">>,Value},Opts]}) when is_integer(Value) ->
@@ -144,7 +139,6 @@ parse_selector({[{<<"$text">>,Value},Opts]}) when is_float(Value) ->
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = BinVal};
 parse_selector({[{<<"$text">>,Value},Opts]}) when is_boolean(Value) ->
-    twig:log(notice,"IndexQueryArgs ~p", [parse_options(Opts)]),
     Query = case Value of
         true -> <<"true">>;
         false -> <<"false">>
@@ -168,10 +162,12 @@ parse_option({<<"$ranges">>,Val},IndexQueryArgs) ->
 
 
 %% Options below are currently not supported and won't pass the validator
+%% but we leave the code here to use in future
 parse_option({<<"$group">>,Val},IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{grouping=Val};
 parse_option({<<"$drilldown">>,Val},IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{drilldown=Val};
+
 parse_option({Option,_},_) ->
     ?MANGO_ERROR({unknown_option, {option, Option}}).
 
@@ -184,8 +180,6 @@ find_usable_indexes(Possible, Existing) ->
     Usable = lists:foldl(fun(Idx, Acc) ->
         Columns = mango_idx:columns(Idx),
         %% Check to see if any of the Columns exist in our Possible Fields
-        twig:log(notice, "Columns find usable ~p", [Columns]),
-        twig:log(notice, "Possible find usable ~p", [Possible]),
         case sets:is_subset(sets:from_list(Possible),sets:from_list(Columns)) of
             true ->
                 [Idx | Acc];
@@ -199,7 +193,7 @@ find_usable_indexes(Possible, Existing) ->
     Usable.
 
 %% If no field list exists, we choose the default field with the most
-%% sub fields indexed, otherwise just choose the first one
+%% sub fields indexed, otherwise just choose the last one created
 choose_best_index(Indexes,IndexFields) -> 
     case IndexFields of
         [<<"default">>] ->

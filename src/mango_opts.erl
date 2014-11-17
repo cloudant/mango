@@ -122,11 +122,10 @@ validate(Props, Opts) ->
     {ok, Acc}.
 
 
-%%Checks to see if the selector is using a $text operator.
-%%Return a mango_cursor_text for text cursor.
+%% Checks to see if the selector is using a $text operator.
+%% Return a mango_cursor_text for text cursor.
 index_cursor_type(Selector) ->
     SelString = lists:flatten(io_lib:format("~p",[Selector])),
-    twig:log(notice,"String value ~p",[string:str(SelString,"<<\"$text\">>")]),
     case mango_util:sub_string(SelString,"<<\"$text\">>") of
         0 -> mango_cursor_view;
         1 -> mango_cursor_text;

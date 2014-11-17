@@ -11,9 +11,10 @@
 
 
 %% Normalize Text Selector
-%% All text selectors will be normalized to:
+%% This is more like a validator than a normalizer since we except users to provide
+%% a text search in the following format:
 %% {
-%%    "$text": query-string
+%%    "$text": query-string,
 %%    "$options":
 %%      {
 %%       "$bookmark":  val1,
@@ -21,6 +22,8 @@
 %%       "$ranges": val3
 %%      }
 %% }
+%% Otherwise, we throw an error.
+%% In the future, we can accept more complex sytnax that we can normalize.
 normalize({[]}) ->
     {[]};
 normalize(Selector) ->
@@ -28,19 +31,9 @@ normalize(Selector) ->
         fun norm_ops/1
     ],
     {NProps} = lists:foldl(fun(Step, Sel) -> Step(Sel) end, Selector, Steps),
-    % FieldNames = [Name || {Name, _} <- Props],
-    % NProps = case lists:member(<<>>, FieldNames) of
-    %     true ->
-    %         %%use default as our field when no field has been specified
-    %         [<<"default">>,{Props}];
-    %     false ->
-    %         Props
-    % end,
-    %twig:log(notice, "NProps~p",[NProps]),
     {NProps}.
 
 %%text seach operators
-
 norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
     {[{<<"$text">>, Arg}]};
 norm_ops({[{<<"$text">>, Arg}]}) ->

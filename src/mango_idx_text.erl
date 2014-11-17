@@ -143,7 +143,8 @@ make_text(Idx) ->
     ]},
     {Idx#idx.name, Text}.
 
-
+%% This default field is added to all indexes. It indexes
+%% all fields provided by the user, including sub fields.
 add_default_field({[{fields,Fields},Analyzer,Selector]}) ->
     FinalFields=lists:foldl(fun (Field,FieldsAcc) ->
         case Field of
@@ -154,14 +155,14 @@ add_default_field({[{fields,Fields},Analyzer,Selector]}) ->
                     Else -> lists:append(FieldsAcc,Else)
                 end;
             FieldName when is_binary(FieldName) ->
-                    [FieldName | FieldsAcc];
+                [FieldName | FieldsAcc];
             FieldName ->
                 ?MANGO_ERROR({invalid_index_type, FieldName})
         end
     end,[],Fields),
     DefaultField = {[{<<"default">>,
-                        {[{<<"facet">>,false},
-                        {<<"index">>,true},
-                        {<<"doc_fields">>,FinalFields},
-                        {<<"store">>,false}]}}]},
+        {[{<<"facet">>,false},
+        {<<"index">>,true},
+        {<<"doc_fields">>,FinalFields},
+        {<<"store">>,false}]}}]},
     {[{fields,[DefaultField|Fields]},Analyzer,Selector]}.
