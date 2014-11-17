@@ -36,5 +36,7 @@ extract(Doc, Fields) ->
 
 field(Val) when is_binary(Val) ->
     Val;
+field(Val) when is_tuple(Val) ->
+    Val;
 field(Else) ->
     ?MANGO_ERROR({invalid_field_json, Else}).
