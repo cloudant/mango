@@ -110,31 +110,15 @@ ddocid(Idx) ->
             Else
     end.
 
-%% Parse Selector when no options provided
-parse_selector({[{<<"$text">>,Value}]}) when is_binary(Value) ->
-    #index_query_args{q = Value};
-parse_selector({[{<<"$text">>,Value}]}) when is_integer(Value) ->
-    BinVal = list_to_binary(integer_to_list(Value)),
-    #index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>,Value}]}) when is_float(Value) ->
-    BinVal = list_to_binary(float_to_list(Value)),
-    #index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>,Value}]}) when is_boolean(Value) ->
-    Query = case Value of
-        true -> <<"true">>;
-        false -> <<"false">>
-    end,
-    #index_query_args{q=Query};
 
-% Parse Selector With Options
-parse_selector({[{<<"$text">>,Value},Opts]}) when is_binary(Value) ->
+parse_selector({[{<<"$text">>,Value} | Opts]}) when is_binary(Value) ->
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = Value};
-parse_selector({[{<<"$text">>,Value},Opts]}) when is_integer(Value) ->
+parse_selector({[{<<"$text">>,Value} | Opts]}) when is_integer(Value) ->
     BinVal = list_to_binary(integer_to_list(Value)),
     IndexQueryArgs = parse_options(Opts),
    IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>,Value},Opts]}) when is_float(Value) ->
+parse_selector({[{<<"$text">>,Value} | Opts]}) when is_float(Value) ->
     BinVal = list_to_binary(float_to_list(Value)),
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = BinVal};
@@ -146,7 +130,8 @@ parse_selector({[{<<"$text">>,Value},Opts]}) when is_boolean(Value) ->
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = Query}.
 
-
+parse_options([]) ->
+    #index_query_args{};
 parse_options(SearchOptions) ->
     {<<"$options">>,{Options}} = SearchOptions,
     lists:foldl (fun (Option,QueryArgsAcc) ->
@@ -159,14 +144,6 @@ parse_option({<<"$counts">>,Val},IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{counts=Val};
 parse_option({<<"$ranges">>,Val},IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{ranges=Val};
-
-
-%% Options below are currently not supported and won't pass the validator
-%% but we leave the code here to use in future
-parse_option({<<"$group">>,Val},IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{grouping=Val};
-parse_option({<<"$drilldown">>,Val},IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{drilldown=Val};
 
 parse_option({Option,_},_) ->
     ?MANGO_ERROR({unknown_option, {option, Option}}).
