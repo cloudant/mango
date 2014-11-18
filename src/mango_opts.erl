@@ -8,8 +8,6 @@
 -export([
     validate/2,
 
-    index_cursor_type/1,
-
     is_string/1,
     is_boolean/1,
     is_pos_integer/1,
@@ -122,16 +120,6 @@ validate(Props, Opts) ->
     {ok, Acc}.
 
 
-%% Checks to see if the selector is using a $text operator.
-%% Return a mango_cursor_text for text cursor.
-index_cursor_type(Selector) ->
-    SelString = lists:flatten(io_lib:format("~p",[Selector])),
-    case mango_util:sub_string(SelString,"<<\"$text\">>") of
-        0 -> mango_cursor_view;
-        1 -> mango_cursor_text;
-        _ -> ?MANGO_ERROR({multiple_text_operator, {invalid_selector,Selector}})
-    end.
-
 is_string(Val) when is_binary(Val) ->
     {ok, Val};
 is_string(Else) ->
@@ -172,7 +160,7 @@ validate_idx_name(Else) ->
 
 
 validate_selector({Props}) ->
-    Norm = case index_cursor_type({Props}) of
+    Norm = case mango_selector:index_cursor_type({Props}) of
         mango_cursor_text -> mango_text_selector:normalize({Props});
         _ -> mango_selector:normalize({Props})
     end,

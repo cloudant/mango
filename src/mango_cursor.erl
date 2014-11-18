@@ -15,9 +15,9 @@
 
 -define(SUPERVISOR, mango_cursor_sup).
 
-create(Db, Selector0, Opts) ->
-    Mod = mango_opts:index_cursor_type(Selector0),
-    Mod:create(Db,Selector0,Opts).
+create(Db, Selector, Opts) ->
+    Mod = mango_selector:index_cursor_type(Selector),
+    Mod:create(Db,Selector,Opts).
 
 
 execute(#cursor{index=Idx}=Cursor, UserFun, UserAcc) ->

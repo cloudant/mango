@@ -17,9 +17,7 @@
     dec_dbname/1,
 
     enc_hex/1,
-    dec_hex/1,
-
-    sub_string/2
+    dec_hex/1
 ]).
 
 
@@ -149,10 +147,6 @@ check_lang(#doc{body = {Props}} = Doc) ->
         Else ->
             ?MANGO_ERROR({invalid_ddoc_lang, Else})
     end.
-
-%% Returns number of occurrences of Sub in String
-sub_string(String, Sub) ->
-    erlang:length( binary:split(binary:list_to_bin(String), binary:list_to_bin(Sub), [global]) ) - 1.
 
 
 to_lower(Key) when is_binary(Key) ->
