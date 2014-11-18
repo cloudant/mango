@@ -84,16 +84,16 @@ execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, 
             ?MANGO_ERROR({text_search_error, {error,Reason}})
     end.
 
-%% Query For Dreyfus Sort, Covert <<"Field">>,<<"desc">> to <<"-Field">>
+%% Convert Query to Dreyfus sort specifications 
+%% Covert <<"Field">>,<<"desc">> to <<"-Field">>
 %% and append to the dreyfus query
 sort_query(Opts) ->
     {sort, {Sort}} = lists:keyfind(sort, 1, Opts),
     SortList = lists:map(fun(SortField) -> 
-        {Field,Dir} = SortField,
-        case Dir of
-            <<"asc">> -> Field;
-            <<"desc">> -> <<"-",Field/binary>>;
-            _ -> Field
+        case SortField of
+            {Field, <<"asc">>} -> Field;
+            {Field, <<"desc">>} -> <<"-", Field/binary>>;
+            Field when is_binary(Field) -> Field
         end
     end,Sort),
     case SortList of
@@ -133,7 +133,7 @@ parse_selector({[{<<"$text">>,Value},Opts]}) when is_boolean(Value) ->
 parse_options([]) ->
     #index_query_args{};
 parse_options(SearchOptions) ->
-    {<<"$options">>,{Options}} = SearchOptions,
+    [{<<"$options">>,{Options}}] = SearchOptions,
     lists:foldl (fun (Option,QueryArgsAcc) ->
         parse_option(Option,QueryArgsAcc)
     end, #index_query_args{}, Options).
