@@ -423,6 +423,7 @@ indexable({[{<<"$gte">>, _}]}) ->
 indexable({[{<<"$", _/binary>>, _}]}) ->
     false.
 
+
 % Adjust Low and High based on values found for the
 % givend Index in Selector.
 range({[{<<"$and">>, Args}]}, Index, LCmp, Low, HCmp, High) ->

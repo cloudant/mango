@@ -15,6 +15,7 @@
 
 -define(SUPERVISOR, mango_cursor_sup).
 
+
 create(Db, Selector, Opts) ->
     Mod = mango_selector:index_cursor_type(Selector),
     Mod:create(Db,Selector,Opts).
@@ -38,6 +39,7 @@ get_sort_indexes(ExistingIndexes, UsableIndexes, Opts) ->
 
 limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     Fields = mango_sort:fields(Sort),
+
     % First make sure that we have an index that could
     % answer this sort. We split like this so that the
     % user error is more obvious.
@@ -54,6 +56,7 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     if SortIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, {sort, Fields}})
     end,
+
     % And then check if one or more of our SortIndexes
     % is usable.
     UsableFilt = fun(Idx) -> lists:member(Idx, UsableIndexes) end,
@@ -61,4 +64,5 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     if FinalIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, sort_field})
     end,
+
     FinalIndexes.
