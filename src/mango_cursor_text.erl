@@ -58,28 +58,23 @@ execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, 
         sort=SortQuery
     },
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
-        {ok, Bookmark0, _, Hits0, Counts0, Ranges0} ->
+        {ok, Bookmark0, _, Hits0, _, _} ->
             Hits = hits_to_json(DbName, true, Hits0),
             Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark0),
-            Counts = case Counts0 of
-                undefined ->
-                    [];
-                _ ->
-                    [{counts, facets_to_json(Counts0)}]
+            UserAcc1 = try UserFun({row, {[{bookmark,Bookmark}]}}, UserAcc) of
+                {ok, NewAcc} -> NewAcc;
+                {stop, Acc} -> Acc
+            catch
+                error:{error, Error}  -> ?MANGO_ERROR({text_search_error, {error,Error}})
             end,
-            Ranges = case Ranges0 of
-                undefined ->
-                    [];
-                _ ->
-                    [{ranges, facets_to_json(Ranges0)}]
-            end,
-            {ok, UserAcc0} = UserFun({row, {Counts}}, UserAcc),
-            {ok, UserAcc1} = UserFun({row, {Ranges}}, UserAcc0),
-            {ok, UserAcc2} = UserFun({row, {[{bookmark,Bookmark}]}}, UserAcc1),
-            {ok,lists:foldl(fun(Hit,Acc) -> 
-                {ok, {Resp1, ",\r\n"}} = UserFun({row, Hit}, Acc),
-                {Resp1, ",\r\n"}
-               end, UserAcc2,Hits)};
+            {ok,lists:foldl(fun(Hit,HAcc) ->
+                try UserFun({row, Hit}, HAcc) of
+                    {ok, HNewAcc} -> HNewAcc;
+                    {stop, HAcc} -> HAcc
+                catch
+                    error:{error, HError}  -> ?MANGO_ERROR({text_search_error, {error,HError}})
+                end
+            end, UserAcc1,Hits)};
         {error, Reason} ->
             ?MANGO_ERROR({text_search_error, {error,Reason}})
     end.
