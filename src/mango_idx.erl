@@ -51,14 +51,14 @@ list(Db) ->
     end, DDocs).
 
 %%Filter our index list based on the types provided
-filter_list(Indexes,Types) ->
+filter_list(Indexes, Types) ->
     Pred = fun (Index) ->
-        case lists:member(Index#idx.type,Types) of
+        case lists:member(Index#idx.type, Types) of
             true -> true;
             _ -> false
         end
     end,
-    lists:filter(Pred,Indexes).
+    lists:filter(Pred, Indexes).
 
 
 new(Db, Opts) ->

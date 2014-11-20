@@ -19,10 +19,10 @@ create(Db, Selector0, Opts) ->
         Else -> Else
     end,
     IndexFields = [<<"default">> | Fields],
-    ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"text">>]),
-    UsableIndexes = find_usable_indexes(IndexFields,ExistingIndexes),
+    ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"text">>]),
+    UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
-    Index = choose_best_index(SortIndexes,IndexFields),
+    Index = choose_best_index(SortIndexes, IndexFields),
     Limit = couch_util:get_value(limit, Opts, 50),
     %% The default passed in from Opts is 10000000000, which dreyfus will not accept
     %% For now, we cap it at 50
@@ -44,7 +44,7 @@ create(Db, Selector0, Opts) ->
     }}.
 
 
-execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, UserAcc) ->
+execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun, UserAcc) ->
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
@@ -61,26 +61,26 @@ execute(#cursor{db = Db, index = Idx,limit=Limit,opts=Opts} = Cursor0, UserFun, 
         {ok, Bookmark0, _, Hits0, _, _} ->
             Hits = hits_to_json(DbName, true, Hits0),
             Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark0),
-            UserAcc1 = try UserFun({row, {[{bookmark,Bookmark}]}}, UserAcc) of
+            UserAcc1 = try UserFun({row, {[{bookmark, Bookmark}]}}, UserAcc) of
                 {ok, NewAcc} -> NewAcc;
                 {stop, Acc} -> Acc
             catch
-                error:{error, Error}  -> ?MANGO_ERROR({text_search_error, {error,Error}})
+                error:{error, Error}  -> ?MANGO_ERROR({text_search_error, {error, Error}})
             end,
-            {ok,lists:foldl(fun(Hit,HAcc) ->
+            {ok, lists:foldl(fun(Hit, HAcc) ->
                 try UserFun({row, Hit}, HAcc) of
                     {ok, HNewAcc} -> HNewAcc;
                     {stop, HAcc} -> HAcc
                 catch
-                    error:{error, HError}  -> ?MANGO_ERROR({text_search_error, {error,HError}})
+                    error:{error, HError}  -> ?MANGO_ERROR({text_search_error, {error, HError}})
                 end
-            end, UserAcc1,Hits)};
+            end, UserAcc1, Hits)};
         {error, Reason} ->
-            ?MANGO_ERROR({text_search_error, {error,Reason}})
+            ?MANGO_ERROR({text_search_error, {error, Reason}})
     end.
 
 %% Convert Query to Dreyfus sort specifications 
-%% Covert <<"Field">>,<<"desc">> to <<"-Field">>
+%% Covert <<"Field">>, <<"desc">> to <<"-Field">>
 %% and append to the dreyfus query
 sort_query(Opts) ->
     {sort, {Sort}} = lists:keyfind(sort, 1, Opts),
@@ -90,7 +90,7 @@ sort_query(Opts) ->
             {Field, <<"desc">>} -> <<"-", Field/binary>>;
             Field when is_binary(Field) -> Field
         end
-    end,Sort),
+    end, Sort),
     case SortList of
         [] -> relevance;
         _ -> SortList
@@ -106,18 +106,18 @@ ddocid(Idx) ->
     end.
 
 
-parse_selector({[{<<"$text">>,Value} | Opts]}) when is_binary(Value) ->
+parse_selector({[{<<"$text">>, Value} | Opts]}) when is_binary(Value) ->
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = Value};
-parse_selector({[{<<"$text">>,Value} | Opts]}) when is_integer(Value) ->
+parse_selector({[{<<"$text">>, Value} | Opts]}) when is_integer(Value) ->
     BinVal = list_to_binary(integer_to_list(Value)),
     IndexQueryArgs = parse_options(Opts),
    IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>,Value} | Opts]}) when is_float(Value) ->
+parse_selector({[{<<"$text">>, Value} | Opts]}) when is_float(Value) ->
     BinVal = list_to_binary(float_to_list(Value)),
     IndexQueryArgs = parse_options(Opts),
     IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>,Value},Opts]}) when is_boolean(Value) ->
+parse_selector({[{<<"$text">>, Value}, Opts]}) when is_boolean(Value) ->
     Query = case Value of
         true -> <<"true">>;
         false -> <<"false">>
@@ -128,19 +128,19 @@ parse_selector({[{<<"$text">>,Value},Opts]}) when is_boolean(Value) ->
 parse_options([]) ->
     #index_query_args{};
 parse_options(SearchOptions) ->
-    [{<<"$options">>,{Options}}] = SearchOptions,
-    lists:foldl (fun (Option,QueryArgsAcc) ->
-        parse_option(Option,QueryArgsAcc)
+    [{<<"$options">>, {Options}}] = SearchOptions,
+    lists:foldl (fun (Option, QueryArgsAcc) ->
+        parse_option(Option, QueryArgsAcc)
     end, #index_query_args{}, Options).
 
-parse_option({<<"$bookmark">>,Val},IndexQueryArgs) ->
+parse_option({<<"$bookmark">>, Val}, IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{bookmark=Val};
-parse_option({<<"$counts">>,Val},IndexQueryArgs) ->
+parse_option({<<"$counts">>, Val}, IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{counts=Val};
-parse_option({<<"$ranges">>,Val},IndexQueryArgs) ->
+parse_option({<<"$ranges">>, Val}, IndexQueryArgs) ->
     IndexQueryArgs#index_query_args{ranges=Val};
 
-parse_option({Option,_},_) ->
+parse_option({Option, _}, _) ->
     ?MANGO_ERROR({unknown_option, {option, Option}}).
 
 
@@ -152,7 +152,7 @@ find_usable_indexes(Possible, Existing) ->
     Usable = lists:foldl(fun(Idx, Acc) ->
         Columns = mango_idx:columns(Idx),
         %% Check to see if any of the Columns exist in our Possible Fields
-        case sets:is_subset(sets:from_list(Possible),sets:from_list(Columns)) of
+        case sets:is_subset(sets:from_list(Possible), sets:from_list(Columns)) of
             true ->
                 [Idx | Acc];
             false ->
@@ -166,7 +166,7 @@ find_usable_indexes(Possible, Existing) ->
 
 %% If no field list exists, we choose the default field with the most
 %% sub fields indexed, otherwise just choose the last one created
-choose_best_index(Indexes,IndexFields) -> 
+choose_best_index(Indexes, IndexFields) ->
     case IndexFields of
         [<<"default">>] ->
             lists:foldl(fun(Idx, Acc) ->

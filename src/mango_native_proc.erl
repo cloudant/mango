@@ -116,23 +116,23 @@ get_index_entries({IdxProps}, Doc) ->
 
 %% Retrieves values for each field and returns it to dreyfus for indexing
 get_text_entries({IdxProps}, Doc0) ->
-    Selector = case couch_util:get_value(<<"selector">>,IdxProps) of
+    Selector = case couch_util:get_value(<<"selector">>, IdxProps) of
         [] -> {[]};
         Else -> Else
     end,
-    Doc = filter_doc(Selector,Doc0),
+    Doc = filter_doc(Selector, Doc0),
     Fields = couch_util:get_value(<<"fields">>, IdxProps),
     Results = lists:map(fun(Field) -> 
     FieldName = get_textfield_name(Field),
-    Values0 = get_textfield_values(Doc,Field),
+    Values0 = get_textfield_values(Doc, Field),
     Values1 = format_text_values(Values0),
-    Store = get_textfield_opts(Field,<<"store">>),
-    Index = get_textfield_opts(Field,<<"index">>),
-    Facet = get_textfield_opts(Field,<<"facet">>),
+    Store = get_textfield_opts(Field, <<"store">>),
+    Index = get_textfield_opts(Field, <<"index">>),
+    Facet = get_textfield_opts(Field, <<"facet">>),
         case Values1 of 
             not_found -> not_found;
             [] -> not_found;
-            _ -> [FieldName, Values1, [{<<"store">>,Store}, {<<"index">>,Index},{<<"facet">>,Facet}]]
+            _ -> [FieldName, Values1, [{<<"store">>, Store}, {<<"index">>, Index}, {<<"facet">>, Facet}]]
         end
     end, Fields),
     case lists:member(not_found, Results) of
@@ -146,11 +146,11 @@ get_text_entries({IdxProps}, Doc0) ->
 %% If it is a single array value, then we send in the type: string, number, or boolean.
 %% If it is an array of values, we combine all values into a single string
 %% separated by whitespace(for tokenization).
-%% So [<"A">>,<<"B">>,<<"C">> becomes] <<" A B C">>
+%% So [<"A">>, <<"B">>, <<"C">> becomes] <<" A B C">>
 format_text_values(Values) when is_list(Values) ->
     Results = lists:map(fun (Val) -> 
         format_text_values(Val)
-    end,Values),
+    end, Values),
     case length(Results) of
         0 ->
             [];
@@ -158,7 +158,7 @@ format_text_values(Values) when is_list(Values) ->
             [Val|_] = Results,
             Val;
         _ ->
-            lists:foldl(fun(Val,Acc) -> Bin=to_bin(Val),<<Acc/binary," ",Bin/binary>> end,<<>>,Results)
+            lists:foldl(fun(Val, Acc) -> Bin=to_bin(Val), <<Acc/binary, " ", Bin/binary>> end, <<>>, Results)
     end;
 format_text_values(Values) when is_tuple(Values) ->
     format_text_values(tuple_to_list(Values)); 
@@ -185,34 +185,34 @@ to_bin(_)->
 
 %% This is used by the selector for the lucene field name
 %% to filter out documents prior to the text search
-filter_doc(Selector0,Doc) ->
+filter_doc(Selector0, Doc) ->
     Selector = mango_selector:normalize(Selector0),
-    case mango_selector:match(Selector,Doc) of
+    case mango_selector:match(Selector, Doc) of
         true -> Doc;
         false -> []
     end.
 
 
-get_textfield_name({[{FieldName,_}]}) ->
+get_textfield_name({[{FieldName, _}]}) ->
     FieldName;
 get_textfield_name(Field) ->
     Field.
 
 
-get_textfield_values(Doc,{[{FieldName,{FieldOpts}}]}) ->
+get_textfield_values(Doc, {[{FieldName, {FieldOpts}}]}) ->
     DocFields = case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
         [] -> [FieldName];
         undefined -> [FieldName];
-        Else -> Else 
+        Else -> Else
     end,
     Values = lists:map(fun(SubField) ->
-        get_textfield_values(Doc,SubField)
-    end,DocFields),
-    case lists:member(not_found,Values) of 
+        get_textfield_values(Doc, SubField)
+    end, DocFields),
+    case lists:member(not_found, Values) of
             true-> [];
             false -> Values
         end;
-get_textfield_values(Doc,Field) ->
+get_textfield_values(Doc, Field) ->
     case mango_doc:get_field(Doc, Field) of
         not_found -> not_found;
         bad_path -> not_found;
@@ -220,15 +220,15 @@ get_textfield_values(Doc,Field) ->
     end.
 
 
-get_textfield_opts({[{_,{FieldOpts}}]},Option) ->
+get_textfield_opts({[{_, {FieldOpts}}]}, Option) ->
     Result =case Option of
-        <<"store">> -> couch_util:get_value(<<"store">>,FieldOpts,false);
-        <<"index">> -> couch_util:get_value(<<"index">>,FieldOpts,true);
-        <<"facet">> -> couch_util:get_value(<<"facet">>,FieldOpts,false);
+        <<"store">> -> couch_util:get_value(<<"store">>, FieldOpts, false);
+        <<"index">> -> couch_util:get_value(<<"index">>, FieldOpts, true);
+        <<"facet">> -> couch_util:get_value(<<"facet">>, FieldOpts, false);
         _->undefined_textfield_option
     end,
     Result;
-get_textfield_opts(_,Option) ->
+get_textfield_opts(_, Option) ->
     %return defaults when no options are provided
     case Option of
         <<"store">> -> false;

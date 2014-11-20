@@ -18,7 +18,7 @@
 
 create(Db, Selector, Opts) ->
     Mod = mango_selector:index_cursor_type(Selector),
-    Mod:create(Db,Selector,Opts).
+    Mod:create(Db, Selector, Opts).
 
 
 execute(#cursor{index=Idx}=Cursor, UserFun, UserAcc) ->
@@ -47,7 +47,7 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
         Cols = mango_idx:columns(Idx),
         case mango_idx:type(Idx) of
             <<"text">> ->
-                sets:is_subset(sets:from_list(Fields),sets:from_list(Cols));
+                sets:is_subset(sets:from_list(Fields), sets:from_list(Cols));
             _ ->
                 lists:prefix(Fields, Cols)
         end

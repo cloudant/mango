@@ -725,16 +725,16 @@ index_cursor_type(<<"$", _/binary>>)->
 index_cursor_type(Selector) when is_list(Selector) ->
     Types = lists:map(fun (Arg) ->
         index_cursor_type(Arg)
-    end,Selector),
-    case lists:member(mango_cursor_text,Types) of
+    end, Selector),
+    case lists:member(mango_cursor_text, Types) of
         true -> mango_cursor_text;
         false -> mango_cursor_view
     end;
 index_cursor_type(Selector)  when is_tuple(Selector)->
     Types = lists:map(fun (Arg) ->
         index_cursor_type(Arg)
-    end,tuple_to_list(Selector)),
-    case lists:member(mango_cursor_text,Types) of
+    end, tuple_to_list(Selector)),
+    case lists:member(mango_cursor_text, Types) of
         true -> mango_cursor_text;
         false -> mango_cursor_view
     end;

@@ -84,15 +84,15 @@ to_json(Idx) ->
 
 columns(Idx) ->
     {Props} = Idx#idx.def,
-    {<<"fields">>,Fields}=lists:keyfind(<<"fields">>, 1, Props),
+    {<<"fields">>, Fields}=lists:keyfind(<<"fields">>, 1, Props),
     lists:map(fun(Field) ->
         case Field of
             B when is_binary(B) ->
                 B;
-            {[{Key,_}]} ->
+            {[{Key, _}]} ->
                 Key
         end
-    end,Fields).
+    end, Fields).
     
 do_validate({Props}) ->
     {ok, Opts} = mango_opts:validate(Props, opts()),
@@ -122,12 +122,12 @@ opts() ->
         {<<"analyzer">>, [
             {tag, analyzer},
             {optional, true},
-            {default,<<"standard">>}
+            {default, <<"standard">>}
         ]},
          {<<"selector">>, [
             {tag, selector},
             {optional, true},
-            {default,{[]}},
+            {default, {[]}},
             {validator, fun mango_opts:validate_selector/1}
         ]}
     ].
@@ -145,24 +145,24 @@ make_text(Idx) ->
 
 %% This default field is added to all indexes. It indexes
 %% all fields provided by the user, including sub fields.
-add_default_field({[{fields,Fields},Analyzer,Selector]}) ->
-    FinalFields=lists:foldl(fun (Field,FieldsAcc) ->
+add_default_field({[{fields, Fields}, Analyzer, Selector]}) ->
+    FinalFields=lists:foldl(fun (Field, FieldsAcc) ->
         case Field of
-            {[{FieldName,{FieldOpts}}]} ->
+            {[{FieldName, {FieldOpts}}]} ->
                 case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
                     [] -> [FieldName | FieldsAcc];
                     undefined -> [FieldName | FieldsAcc];
-                    Else -> lists:append(FieldsAcc,Else)
+                    Else -> lists:append(FieldsAcc, Else)
                 end;
             FieldName when is_binary(FieldName) ->
                 [FieldName | FieldsAcc];
             FieldName ->
                 ?MANGO_ERROR({invalid_index_type, FieldName})
         end
-    end,[],Fields),
+    end, [], Fields),
     DefaultField = {[{<<"default">>,
-        {[{<<"facet">>,false},
-        {<<"index">>,true},
-        {<<"doc_fields">>,FinalFields},
-        {<<"store">>,false}]}}]},
-    {[{fields,[DefaultField|Fields]},Analyzer,Selector]}.
+        {[{<<"facet">>, false},
+        {<<"index">>, true},
+        {<<"doc_fields">>, FinalFields},
+        {<<"store">>, false}]}}]},
+    {[{fields, [DefaultField|Fields]}, Analyzer, Selector]}.

@@ -22,7 +22,7 @@ create(Db, Selector0, Opts) ->
         ?MANGO_ERROR({no_usable_index, operator_unsupported})
     end,
 
-    ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db),[<<"json">>,<<"special">>]),
+    ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"json">>, <<"special">>]),
     UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
 

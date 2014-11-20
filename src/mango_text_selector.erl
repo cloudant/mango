@@ -41,7 +41,7 @@ norm_ops({[{<<"$text">>, Arg}]}) ->
 
 %%Options with $text
 norm_ops({[{<<"$text">>, Arg}, Opts]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
-     {[{<<"$text">>, Arg},norm_ops(Opts)]};
+     {[{<<"$text">>, Arg}, norm_ops(Opts)]};
 norm_ops({[{<<"$text">>, Arg}, _]}) ->
       ?MANGO_ERROR({bad_arg, '$text', Arg});
 
