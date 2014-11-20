@@ -33,13 +33,13 @@ normalize(Selector) ->
     {NProps} = lists:foldl(fun(Step, Sel) -> Step(Sel) end, Selector, Steps),
     {NProps}.
 
-%%text seach operators
+%% text seach operators
 norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
     {[{<<"$text">>, Arg}]};
 norm_ops({[{<<"$text">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$text', Arg});
 
-%%Options with $text
+%% Options with $text
 norm_ops({[{<<"$text">>, Arg}, Opts]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
      {[{<<"$text">>, Arg}, norm_ops(Opts)]};
 norm_ops({[{<<"$text">>, Arg}, _]}) ->

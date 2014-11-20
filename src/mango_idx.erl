@@ -50,7 +50,7 @@ list(Db) ->
         from_ddoc(Db, Doc)
     end, DDocs).
 
-%%Filter our index list based on the types provided
+%% Filter our index list based on the types provided
 filter_list(Indexes, Types) ->
     Pred = fun (Index) ->
         case lists:member(Index#idx.type, Types) of
@@ -66,14 +66,12 @@ new(Db, Opts) ->
     Type = get_idx_type(Opts),
     IdxName = get_idx_name(Def, Opts),
     DDoc = get_idx_ddoc(Def, Opts),
-    %Alyzer = get_idx_alyzer(Opts),
     {ok, #idx{
         dbname = db_to_name(Db),
         ddoc = DDoc,
         name = IdxName,
         type = Type,
         def = Def,
-        %analyzer=Alyzer,
         opts = filter_opts(Opts)
     }}.
 
@@ -153,10 +151,6 @@ def(#idx{def=Def}) ->
 
 opts(#idx{opts=Opts}) ->
     Opts.
-
-
-%alyzer(#idx{analyzer=Alyzer}) ->
- %   Alyzer.
 
 
 to_json(#idx{}=Idx) ->
@@ -242,15 +236,6 @@ get_idx_name(Idx, Opts) ->
         _ ->
             gen_name(Idx, Opts)
     end.
-
-
-% get_idx_alyzer(Opts) ->
-%     case proplists:get_value(analyzer, Opts) of
-%        undefined ->
-%             <<"standard">>;
-%         Alyzer ->
-%             Alyzer
-%     end.
 
 
 gen_name(Idx, Opts0) ->

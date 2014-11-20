@@ -136,9 +136,9 @@ opts() ->
 make_text(Idx) ->
     Text= {[
         {<<"index">>, add_default_field(Idx#idx.def)},
-        %%options also has a list of fields. we don't add a default field
-        %%because we don't reference it during index creation or search
-        %%this may change later?
+        %% options also has a list of fields. we don't add a default field
+        %% because we don't reference it during index creation or search
+        %% this may change later?
         {<<"options">>, {Idx#idx.opts}}
     ]},
     {Idx#idx.name, Text}.

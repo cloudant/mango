@@ -164,7 +164,7 @@ format_text_values(Values) when is_tuple(Values) ->
     format_text_values(tuple_to_list(Values)); 
 format_text_values(Values) when is_number(Values); is_boolean(Values); is_binary(Values)  ->
     Values;
-%%Should we through an error instead here?
+%% Should we through an error instead here?
 format_text_values(_) ->
     [].
 
@@ -229,7 +229,7 @@ get_textfield_opts({[{_, {FieldOpts}}]}, Option) ->
     end,
     Result;
 get_textfield_opts(_, Option) ->
-    %return defaults when no options are provided
+    % return defaults when no options are provided
     case Option of
         <<"store">> -> false;
         <<"index">> -> true;

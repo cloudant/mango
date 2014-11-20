@@ -24,10 +24,10 @@ create(Db, Selector0, Opts) ->
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
     Index = choose_best_index(SortIndexes, IndexFields),
     Limit = couch_util:get_value(limit, Opts, 50),
-    %% The default passed in from Opts is 10000000000, which dreyfus will not accept
-    %% For now, we cap it at 50
+    %% Currently set the Limit at 50. We want to set this
+    %% in mango_opts to be consistent with view queries.
     CapLimit = case Limit > 50 of 
-        true -> 50;  %% Should we throw an error instead?
+        true -> 50;
         false -> Limit
     end,
     Skip = couch_util:get_value(skip, Opts, 0),
@@ -48,10 +48,8 @@ execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
-    % Get the Query arguments and Options
     QueryArgs0 = parse_selector(Cursor0#cursor.selector),
     SortQuery = sort_query(Opts),
-    % Set limit and sort
     QueryArgs = QueryArgs0#index_query_args{
         include_docs = true,
         limit = Limit,
