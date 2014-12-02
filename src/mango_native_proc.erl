@@ -114,6 +114,7 @@ get_index_entries({IdxProps}, Doc) ->
             [[Values, null]]
     end.
 
+
 %% Retrieves values for each field and returns it to dreyfus for indexing
 get_text_entries({IdxProps}, Doc0) ->
     Selector = case couch_util:get_value(<<"selector">>, IdxProps) of
@@ -122,19 +123,13 @@ get_text_entries({IdxProps}, Doc0) ->
     end,
     Doc = filter_doc(Selector, Doc0),
     Fields = couch_util:get_value(<<"fields">>, IdxProps),
-    Results = lists:map(fun(Field) -> 
-    FieldName = get_textfield_name(Field),
-    Values0 = get_textfield_values(Doc, Field),
-    Values1 = format_text_values(Values0),
-    Store = get_textfield_opts(Field, <<"store">>),
-    Index = get_textfield_opts(Field, <<"index">>),
-    Facet = get_textfield_opts(Field, <<"facet">>),
-        case Values1 of 
-            not_found -> not_found;
-            [] -> not_found;
-            _ -> [FieldName, Values1, [{<<"store">>, Store}, {<<"index">>, Index}, {<<"facet">>, Facet}]]
-        end
-    end, Fields),
+    Results = case Fields of
+        <<"all_fields">> -> get_all_textfield_values(Doc, []);
+        _ ->
+            lists:foldl(fun({[{FieldName, FieldType}]}, Acc) ->
+                get_textfield_values(Doc, {FieldName, FieldType}, Acc)
+            end, [], Fields)
+    end,
     case lists:member(not_found, Results) of
         true ->
             [];
@@ -142,103 +137,110 @@ get_text_entries({IdxProps}, Doc0) ->
             Results
     end.
 
-%% Modify text values that will be sent to the dreyfus API
-%% If it is a single array value, then we send in the type: string, number, or boolean.
-%% If it is an array of values, we combine all values into a single string
-%% separated by whitespace(for tokenization).
-%% So [<"A">>, <<"B">>, <<"C">> becomes] <<" A B C">>
-format_text_values(Values) when is_list(Values) ->
-    Results = lists:map(fun (Val) -> 
-        format_text_values(Val)
-    end, Values),
-    case length(Results) of
-        0 ->
-            [];
-        1 -> 
-            [Val|_] = Results,
-            Val;
-        _ ->
-            lists:foldl(fun(Val, Acc) -> Bin=to_bin(Val), <<Acc/binary, " ", Bin/binary>> end, <<>>, Results)
-    end;
-format_text_values(Values) when is_tuple(Values) ->
-    format_text_values(tuple_to_list(Values)); 
-format_text_values(Values) when is_number(Values); is_boolean(Values); is_binary(Values)  ->
-    Values;
-%% Should we through an error instead here?
-format_text_values(_) ->
-    [].
-
-
-to_bin(Val) when is_binary(Val) ->
-    Val;
-to_bin(Val) when is_integer(Val) ->
-    list_to_binary(integer_to_list(Val));
-to_bin(Val) when is_float(Val) ->
-    list_to_binary(float_to_list(Val));
-to_bin(Val) when is_boolean(Val) ->
-    case Val  of
-        true -> <<"true">>;
-        false -> <<"false">>
-    end;
-to_bin(_)->
-    []. 
 
 %% This is used by the selector for the lucene field name
 %% to filter out documents prior to the text search
+%% Also, do not index design documents
 filter_doc(Selector0, Doc) ->
     Selector = mango_selector:normalize(Selector0),
-    case mango_selector:match(Selector, Doc) of
-        true -> Doc;
-        false -> []
+    Match = mango_selector:match(Selector, Doc),
+    DDocId = mango_doc:get_field(Doc, <<"ddoc">>),
+    case {Match, DDocId} of
+        {_, <<"_design/", _/binary>>} -> [];
+        {false, _} -> [];
+        {true, _} -> Doc
     end.
 
 
-get_textfield_name({[{FieldName, _}]}) ->
-    FieldName;
-get_textfield_name(Field) ->
-    Field.
+get_textfield_values(Doc, {FieldName, FieldType}, Acc) ->
+    Path = re:split(FieldName, <<"\\.">>),
+    get_textfield_values(Doc, {FieldName, FieldType}, Path, Acc).
 
-
-get_textfield_values(Doc, {[{FieldName, {FieldOpts}}]}) ->
-    DocFields = case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
-        [] -> [FieldName];
-        undefined -> [FieldName];
-        Else -> Else
-    end,
-    Values = lists:map(fun(SubField) ->
-        get_textfield_values(Doc, SubField)
-    end, DocFields),
-    case lists:member(not_found, Values) of
-            true-> [];
-            false -> Values
-        end;
-get_textfield_values(Doc, Field) ->
-    case mango_doc:get_field(Doc, Field) of
-        not_found -> not_found;
-        bad_path -> not_found;
-        Else -> Else  
-    end.
-
-
-get_textfield_opts({[{_, {FieldOpts}}]}, Option) ->
-    Result =case Option of
-        <<"store">> -> couch_util:get_value(<<"store">>, FieldOpts, false);
-        <<"index">> -> couch_util:get_value(<<"index">>, FieldOpts, true);
-        <<"facet">> -> couch_util:get_value(<<"facet">>, FieldOpts, false);
-        _->undefined_textfield_option
-    end,
-    Result;
-get_textfield_opts(_, Option) ->
-    % return defaults when no options are provided
-    case Option of
-        <<"store">> -> false;
-        <<"index">> -> true;
-        <<"face">> -> false;
-        _->undefined_textfield_option
-    end.
-
-
+get_textfield_values(Values, {FieldName, FieldType}, [SubName | Rest], Acc) when is_list(Values)->
+    case {SubName, Rest} of
+        {<<"[]">>, []} ->
+            lists:foldl(fun (Value, SubAcc) ->
+                case match_text_type(FieldType, Value) of
+                    true ->
+                        [[<<FieldName/binary, ":", FieldType/binary>>, Value, []] | SubAcc];
+                    false ->
+                        SubAcc
+                 end
+            end, Acc, Values);
+        {<<"[]">>, _} ->
+            lists:foldl(fun (Value, SubAcc) ->
+                get_textfield_values(Value, {FieldName, FieldType}, Rest, SubAcc)    
+            end, Acc, Values);
+        {_, _} ->
+            Acc
+    end;
+get_textfield_values({Values}, {FieldName, FieldType}, [SubName | Rest], Acc) ->
+    Values0 = mango_doc:get_field({Values}, SubName),
+    case {SubName, Rest, Values0} of
+        {<<"[]">>, _, _} ->
+            Acc;
+        {_, _, not_found} ->
+            Acc;
+        {_, _, bad_path} ->
+            Acc;
+        {_, [], Value} ->
+            case match_text_type(FieldType, Value) of
+                true ->
+                    [[<<FieldName/binary, ":", FieldType/binary>>, Value, []] | Acc];
+                false ->
+                    Acc
+             end;
+        {_, _, SubDoc} ->
+            get_textfield_values(SubDoc, {FieldName, FieldType}, Rest, Acc)
+    end;
+get_textfield_values(_, _ , _ , Acc) ->
+    Acc.
     
 
- 
+get_all_textfield_values({Doc}, Acc) when is_list(Doc) ->
+    lists:foldl(fun(SubDoc, SubAcc) ->
+        get_all_textfield_values(SubDoc, SubAcc)
+    end, Acc, Doc);
+get_all_textfield_values({<<Field/binary>>, <<Value/binary>>}, Acc) ->
+    Acc0 = [[<<"default">>, Value, []] | Acc],
+    [[<<Field/binary, ":str">>, Value, []] | Acc0];
+get_all_textfield_values({<<Field/binary>>, Value}, Acc) when is_number(Value) ->
+    [[<<Field/binary, ":number">>, Value, []] | Acc];
+get_all_textfield_values({<<Field/binary>>, Value}, Acc) when is_boolean(Value) ->
+    [[<<Field/binary, ":bool">>, Value, []] | Acc];
+%% field : array
+get_all_textfield_values({<<Field/binary>>, Values}, Acc) when is_list(Values) ->
+    lists:foldl(fun(ListVal, SubAcc) ->
+        get_all_textfield_values({<<Field/binary, ".[]">>, ListVal}, SubAcc)
+    end, Acc, Values);
+%% field : object
+get_all_textfield_values({<<Field/binary>>, {Values}}, Acc) when is_list(Values) ->
+    lists:foldl(fun(ListVal, SubAcc) ->
+        get_all_textfield_values({<<Field/binary>>, ListVal}, SubAcc)
+    end, Acc, Values);
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, <<Value/binary>>}}, Acc) ->
+    Acc0 = [[<<"default">>, Value, []] | Acc],
+    [[<<Field/binary, ".", SubField/binary, ":str">>, Value, []] | Acc0];
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Value}}, Acc) when is_number(Value) ->
+    [[<<Field/binary, ".", SubField/binary, ":number">>, Value, []] | Acc];
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Value}}, Acc) when is_boolean(Value) ->
+    [[<<Field/binary, ".", SubField/binary, ":bool">>, Value, []] | Acc];
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Values}}, Acc) when is_list(Values) ->
+    lists:foldl(fun(ListVal, SubAcc) ->
+        get_all_textfield_values({<<Field/binary, ".[].", SubField/binary>>, ListVal}, SubAcc)
+    end, Acc, Values);
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, {Values}}}, Acc) when is_list(Values) ->
+    lists:foldl(fun(ListVal, SubAcc) ->
+        get_all_textfield_values({<<Field/binary, ".", SubField/binary>>, ListVal}, SubAcc)
+    end, Acc, Values).
+
+
+match_text_type(<<"str">>, Value) when is_binary(Value) ->
+    true;
+match_text_type(<<"number">>, Value) when is_number(Value) ->
+    true;
+match_text_type(<<"bool">>, Value) when is_boolean(Value) ->
+    true;
+match_text_type(_, _)  ->
+    false.
 

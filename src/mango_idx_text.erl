@@ -84,17 +84,12 @@ to_json(Idx) ->
 
 columns(Idx) ->
     {Props} = Idx#idx.def,
-    {<<"fields">>, Fields}=lists:keyfind(<<"fields">>, 1, Props),
-    lists:map(fun(Field) ->
-        case Field of
-            B when is_binary(B) ->
-                B;
-            {[{Key, _}]} ->
-                Key
-        end
-    end, Fields).
+    {<<"fields">>, {Fields}} = lists:keyfind(<<"fields">>, 1, Props),
+    [Key || {Key, _} <- Fields].
+
     
 do_validate({Props}) ->
+    twig:log(notice, "Props ~p", [Props]),
     {ok, Opts} = mango_opts:validate(Props, opts()),
     {ok, {Opts}};
 do_validate(Else) ->
@@ -105,6 +100,8 @@ def_to_json({Props}) ->
     def_to_json(Props);
 def_to_json([]) ->
     [];
+def_to_json([{<<"fields">>, <<"all_fields">>} | Rest]) ->
+    [{<<"fields">>, []} | def_to_json(Rest)];
 def_to_json([{fields, Fields} | Rest]) ->
     [{<<"fields">>, mango_sort:to_json(Fields)} | def_to_json(Rest)];
 def_to_json([{<<"fields">>, Fields} | Rest]) ->
@@ -117,6 +114,8 @@ opts() ->
     [   
         {<<"fields">>, [
             {tag, fields},
+            {optional, true},
+            {default, []},
             {validator, fun mango_opts:validate_fields/1}
         ]},
         {<<"analyzer">>, [
@@ -135,34 +134,8 @@ opts() ->
 
 make_text(Idx) ->
     Text= {[
-        {<<"index">>, add_default_field(Idx#idx.def)},
-        %% options also has a list of fields. we don't add a default field
-        %% because we don't reference it during index creation or search
-        %% this may change later?
+        {<<"index">>, Idx#idx.def},
         {<<"options">>, {Idx#idx.opts}}
     ]},
     {Idx#idx.name, Text}.
 
-%% This default field is added to all indexes. It indexes
-%% all fields provided by the user, including sub fields.
-add_default_field({[{fields, Fields}, Analyzer, Selector]}) ->
-    FinalFields=lists:foldl(fun (Field, FieldsAcc) ->
-        case Field of
-            {[{FieldName, {FieldOpts}}]} ->
-                case couch_util:get_value(<<"doc_fields">>, FieldOpts) of
-                    [] -> [FieldName | FieldsAcc];
-                    undefined -> [FieldName | FieldsAcc];
-                    Else -> lists:append(FieldsAcc, Else)
-                end;
-            FieldName when is_binary(FieldName) ->
-                [FieldName | FieldsAcc];
-            FieldName ->
-                ?MANGO_ERROR({invalid_index_type, FieldName})
-        end
-    end, [], Fields),
-    DefaultField = {[{<<"default">>,
-        {[{<<"facet">>, false},
-        {<<"index">>, true},
-        {<<"doc_fields">>, FinalFields},
-        {<<"store">>, false}]}}]},
-    {[{fields, [DefaultField|Fields]}, Analyzer, Selector]}.
