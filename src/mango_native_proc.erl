@@ -144,7 +144,7 @@ get_text_entries({IdxProps}, Doc0) ->
 filter_doc(Selector0, Doc) ->
     Selector = mango_selector:normalize(Selector0),
     Match = mango_selector:match(Selector, Doc),
-    DDocId = mango_doc:get_field(Doc, <<"ddoc">>),
+    DDocId = mango_doc:get_field(Doc, <<"_id">>),
     case {Match, DDocId} of
         {_, <<"_design/", _/binary>>} -> [];
         {false, _} -> [];
@@ -195,8 +195,10 @@ get_textfield_values({Values}, {FieldName, FieldType}, [SubName | Rest], Acc) ->
     end;
 get_textfield_values(_, _ , _ , Acc) ->
     Acc.
-    
 
+
+get_all_textfield_values([], Acc) ->
+    Acc;
 get_all_textfield_values({Doc}, Acc) when is_list(Doc) ->
     lists:foldl(fun(SubDoc, SubAcc) ->
         get_all_textfield_values(SubDoc, SubAcc)
