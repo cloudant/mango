@@ -57,13 +57,13 @@ from_ddoc({Props}) ->
         {<<"indexes">>, {Texts}} when is_list(Texts) ->
             lists:flatmap(fun({Name, {VProps}}) ->
                 Def = proplists:get_value(<<"index">>, VProps),
-                {Opts0} = proplists:get_value(<<"options">>, VProps),
-                Opts = lists:keydelete(<<"sort">>, 1, Opts0),
+                % {Opts0} = proplists:get_value(<<"options">>, VProps),
+                %Opts = lists:keydelete(<<"sort">>, 1, Opts0),
                 I = #idx{
                     type = <<"text">>,
                     name = Name,
-                    def = Def,
-                    opts = Opts
+                    def = Def
+                    % opts = Opts
                 },
                 % TODO: Validate the index definition
                 [I]
@@ -84,12 +84,16 @@ to_json(Idx) ->
 
 columns(Idx) ->
     {Props} = Idx#idx.def,
-    {<<"fields">>, {Fields}} = lists:keyfind(<<"fields">>, 1, Props),
-    [Key || {Key, _} <- Fields].
+    {<<"fields">>, Fields} = lists:keyfind(<<"fields">>, 1, Props),
+    case Fields of
+        <<"all_fields">> ->
+            all_fields;
+        _ ->
+            [{FieldName,FieldType} || {[{_, FieldName}, {_, FieldType}, _]} <- Fields]
+    end.
 
     
 do_validate({Props}) ->
-    twig:log(notice, "Props ~p", [Props]),
     {ok, Opts} = mango_opts:validate(Props, opts()),
     {ok, {Opts}};
 do_validate(Else) ->
@@ -112,22 +116,27 @@ def_to_json([{Key, Value} | Rest]) ->
 
 opts() ->
     [   
-        {<<"fields">>, [
-            {tag, fields},
+        {<<"default_analyzer">>, [
+            {tag, default_analyzer},
             {optional, true},
-            {default, []},
-            {validator, fun mango_opts:validate_fields/1}
+            {default, <<"keyword">>}
         ]},
-        {<<"analyzer">>, [
-            {tag, analyzer},
+        {<<"default_field">>, [
+            {tag, default_field},
             {optional, true},
-            {default, <<"standard">>}
+            {default, {[]}}
         ]},
          {<<"selector">>, [
             {tag, selector},
             {optional, true},
             {default, {[]}},
             {validator, fun mango_opts:validate_selector/1}
+        ]},
+        {<<"fields">>, [
+            {tag, fields},
+            {optional, true},
+            {default, []},
+            {validator, fun mango_opts:validate_fields/1}
         ]}
     ].
 
@@ -135,7 +144,47 @@ opts() ->
 make_text(Idx) ->
     Text= {[
         {<<"index">>, Idx#idx.def},
-        {<<"options">>, {Idx#idx.opts}}
+        {<<"analyzer">>, construct_analyzer(Idx#idx.def)}
     ]},
     {Idx#idx.name, Text}.
+
+
+construct_analyzer({Props}) ->
+    % twig:log(notice, "Props: ~p", [Props]),
+    DefaultAnalyzer = couch_util:get_value(default_analyzer, Props, "keyword"),
+    {DefaultField, DefaultFieldAnalyzer} = case lists:keyfind(default_field, 1, Props) of
+        {[{<<"enabled">>, true}, {<<"analyzer">>, Analyzer}]} ->
+            {true, Analyzer};
+        {[{<<"enabled">>, false}, _]} ->
+            {false, <<"standard">>};
+        _ ->
+            {true, <<"standard">>}
+        end,
+    Fields = couch_util:get_value(fields, Props, []),
+    PerFieldAnalyzerList = lists:foldl(fun ({Field}, Acc) ->
+        {<<"field">>, FieldName} = lists:keyfind(<<"field">>, 1, Field),
+        % twig:log(notice, "FieldName: ~p", [FieldName]),
+        {<<"type">>, FieldType} = lists:keyfind(<<"type">>, 1, Field),
+        % twig:log(notice, "FieldType: ~p", [FieldType]),
+        case lists:keyfind(<<"analyzer">>, 1, Field) of
+            false ->
+                Acc;
+            {<<"analyzer">>, PerFieldAnalyzer} ->
+                 twig:log(notice, "pfa: ~p", [PerFieldAnalyzer]),
+                [{<<FieldName/binary, ":", FieldType/binary>>, PerFieldAnalyzer} | Acc]
+        end
+    end,[],Fields),
+    % twig:log(notice, "PerFieldAnalyzerList: ~p", [PerFieldAnalyzerList]),
+    FinalAnalyzerDef = case DefaultField of
+        true ->
+           [{<<"default">>, DefaultFieldAnalyzer} | PerFieldAnalyzerList];
+        _ ->
+            PerFieldAnalyzerList
+        end,
+    case FinalAnalyzerDef of
+        [] ->
+            "keyword";
+        _ ->
+            {[{<<"name">>, <<"perfield">>}, {<<"default">>, DefaultAnalyzer},  {<<"fields">>, {FinalAnalyzerDef}}]}
+    end.
 
