@@ -170,7 +170,7 @@ construct_analyzer({Props}) ->
             false ->
                 Acc;
             {<<"analyzer">>, PerFieldAnalyzer} ->
-                 twig:log(notice, "pfa: ~p", [PerFieldAnalyzer]),
+                 % twig:log(notice, "pfa: ~p", [PerFieldAnalyzer]),
                 [{<<FieldName/binary, ":", FieldType/binary>>, PerFieldAnalyzer} | Acc]
         end
     end,[],Fields),

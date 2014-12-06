@@ -16,9 +16,11 @@ create(Db, Selector0, Opts) ->
     Selector = mango_text_selector:normalize(Selector0),
     Fields = case couch_util:get_value(fields, Opts, all_fields) of
         all_fields -> [];
+        <<"all_fields">> -> [];
         Else -> Else
     end,
     IndexFields = [<<"default">> | Fields],
+    twig:log(notice, "Index Fields ~p", [IndexFields]),
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
@@ -142,13 +144,16 @@ parse_option({Option, _}, _) ->
     ?MANGO_ERROR({unknown_option, {option, Option}}).
 
 
-find_usable_indexes([], _) ->
-    ?MANGO_ERROR({no_usable_index, query_unsupported});
 find_usable_indexes(Possible, []) ->
     ?MANGO_ERROR({no_usable_index, {fields, Possible}});
+%% If the user did not specify any fields, then return all existing text indexes
+find_usable_indexes([<<"default">>], Existing) ->
+    Existing;
 find_usable_indexes(Possible, Existing) ->
+    % twig:log(notice,"Possible ~p", [Possible]),
     Usable = lists:foldl(fun(Idx, Acc) ->
         Columns = mango_idx:columns(Idx),
+        % twig:log(notice,"Columns ~p", [Columns]),
         %% Check to see if any of the Columns exist in our Possible Fields
         case sets:is_subset(sets:from_list(Possible), sets:from_list(Columns)) of
             true ->
@@ -162,18 +167,15 @@ find_usable_indexes(Possible, Existing) ->
     end,
     Usable.
 
-%% If no field list exists, we choose the default field with the most
-%% sub fields indexed, otherwise just choose the last one created
+%% If no field list exists, we choose the an index that has <<"all_fields">>
+%% or any of the text indexes
 choose_best_index(Indexes, IndexFields) ->
     case IndexFields of
         [<<"default">>] ->
             lists:foldl(fun(Idx, Acc) ->
-                PrevLen = length(mango_idx:columns(Acc)),
-                case length(mango_idx:columns(Idx)) of
-                    Len when Len >= PrevLen ->
-                        Idx;
-                    _ ->
-                        Acc
+                case mango_idx:columns(Acc) of
+                    all_fields -> Idx;
+                    _ -> Acc
                 end
             end, hd(Indexes), Indexes);
         _ ->
