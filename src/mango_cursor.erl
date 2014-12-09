@@ -18,6 +18,7 @@
 
 create(Db, Selector, Opts) ->
     Mod = mango_selector:index_cursor_type(Selector),
+    twig:log(notice, "Mod: ~p",[Mod]),
     Mod:create(Db, Selector, Opts).
 
 

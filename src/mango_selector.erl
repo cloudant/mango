@@ -6,6 +6,7 @@
     index_fields/1,
     range/2,
     match/2,
+    contains_op/2,
     index_cursor_type/1
 ]).
 
@@ -35,6 +36,7 @@ normalize(Selector) ->
         false ->
             ok
     end,
+    twig:log(notice, "NProps ~p", [NProps]),
     {NProps}.
 
 % This function returns a list of indexes that
@@ -167,9 +169,16 @@ norm_ops({[{<<"$elemMatch">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$elemMatch', Arg});
 
 norm_ops({[{<<"$size">>, Arg}]}) when is_integer(Arg), Arg >= 0 ->
+    twig:log(notice, "In Size Ops Norm ~p ", [Arg]),
     {[{<<"$size">>, Arg}]};
 norm_ops({[{<<"$size">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$size', Arg});
+
+%% text seach operators
+norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
+    {[{<<"$text">>, Arg}]};
+norm_ops({[{<<"$text">>, Arg}]}) ->
+    ?MANGO_ERROR({bad_arg, '$text', Arg});
 
 % Terminals where we can't perform any validation
 % on the value because any value is acceptable.
@@ -262,6 +271,9 @@ norm_fields({[{<<"$nor">>, Args}]}, Path) ->
 norm_fields({[{<<"$elemMatch">>, Arg}]}, Path) ->
     Cond = {[{<<"$elemMatch">>, norm_fields(Arg)}]},
     {[{Path, Cond}]};
+
+norm_fields({[{<<"$text">>, _}]} = Cond, <<>>) ->
+    {[{<<"default">>, Cond}]};
 
 % Any other operator is a terminal below which no
 % field names should exist. Set the path to this
@@ -412,10 +424,8 @@ indexable({[{<<"$gt">>, _}]}) ->
     true;
 indexable({[{<<"$gte">>, _}]}) ->
     true;
-% indexable({[{<<"$text">>, _}]}) ->
-%     true;
-% indexable({[{<<"$text">>, _},_]}) ->
-%     true;
+indexable({[{<<"$text">>, _}]}) ->
+    true;
 
 % All other operators are currently not indexable.
 % This is also a subtle assertion that we don't
@@ -600,7 +610,9 @@ match({[{<<"$and">>, Args}]}, Value, Cmp) ->
     lists:all(Pred, Args);
 
 match({[{<<"$or">>, Args}]}, Value, Cmp) ->
-    Pred = fun(SubSel) -> match(SubSel, Value, Cmp) end,
+    % twig:log(notice, "come in here match or*** Arg ~p, Value~p", [Args,Value]),
+    Pred = fun(SubSel) -> twig:log(notice, "come in here or*** SubSelector ~p", [SubSel]),
+        match(SubSel, Value, Cmp) end,
     lists:any(Pred, Args);
 
 match({[{<<"$not">>, Arg}]}, Value, Cmp) ->
@@ -625,6 +637,7 @@ match({[{<<"$all">>, _Args}]}, _Values, _Cmp) ->
 % Matches when any element in values matches the
 % sub-selector Arg.
 match({[{<<"$elemMatch">>, Arg}]}, Values, Cmp) when is_list(Values) ->
+    twig:log(notice, "come in here match elemMAtch*** Arg ~p, Value~p", [Arg,Values]),
     try
         lists:foreach(fun(V) ->
             case match(Arg, V, Cmp) of
@@ -673,6 +686,11 @@ match({[{<<"$exists">>, ShouldExist}]}, Value, _Cmp) ->
 match({[{<<"$type">>, Arg}]}, Value, _Cmp) when is_binary(Arg) ->
     Arg == mango_json:type(Value);
 
+%% always return true since this is mainly for post hoc filtering
+match({[{_, {[{<<"$text">>, _}]}}]}, _, _) ->
+    twig:log(notice, "come in here match text ****"),
+    true;
+
 match({[{<<"$mod">>, [D, R]}]}, Value, _Cmp) when is_integer(Value) ->
     Value rem D == R;
 match({[{<<"$mod">>, _}]}, _Value, _Cmp) ->
@@ -688,6 +706,7 @@ match({[{<<"$regex">>, _}]}, _Value, _Cmp) ->
     false;
 
 match({[{<<"$size">>, Arg}]}, Values, _Cmp) when is_list(Values) ->
+    twig:log(notice, "come in here match size ****"),
     length(Values) == Arg;
 match({[{<<"$size">>, _}]}, _Value, _Cmp) ->
     false;
@@ -716,27 +735,53 @@ match({[{Field, Cond}]}, Value, Cmp) ->
 match({Props} = Sel, _Value, _Cmp) when length(Props) > 1 ->
     erlang:error({unnormalized_selector, Sel}).
 
-%% Checks to see if the selector is using a $text operator somewhere.
-%% Return a mango_cursor_text for text cursor.
-index_cursor_type(<<"$text">>) ->
-    mango_cursor_text;
-index_cursor_type(<<"$", _/binary>>)->
-    mango_cursor_view;
-index_cursor_type(Selector) when is_list(Selector) ->
-    Types = lists:map(fun (Arg) ->
-        index_cursor_type(Arg)
+contains_op(Selector, Operators) when is_binary(Selector), is_list(Operators) ->
+    lists:member(Selector, Operators);
+contains_op(Selector, Operator) when is_binary(Selector) ->
+    Selector =:= Operator;
+contains_op(Selector, Operator) when is_list(Selector) ->
+    Elements = lists:map(fun (Arg) ->
+        contains_op(Arg, Operator)
     end, Selector),
-    case lists:member(mango_cursor_text, Types) of
-        true -> mango_cursor_text;
-        false -> mango_cursor_view
-    end;
-index_cursor_type(Selector)  when is_tuple(Selector)->
-    Types = lists:map(fun (Arg) ->
-        index_cursor_type(Arg)
+    lists:member(true, Elements);
+contains_op(Selector, Operator)  when is_tuple(Selector)->
+    Elements = lists:map(fun (Arg) ->
+        contains_op(Arg, Operator)
     end, tuple_to_list(Selector)),
-    case lists:member(mango_cursor_text, Types) of
-        true -> mango_cursor_text;
-        false -> mango_cursor_view
-    end;
-index_cursor_type(_) ->
-    mango_cursor_view.
+    lists:member(true, Elements);
+contains_op(_, _) ->
+    false.
+
+index_cursor_type(Selector) ->
+    IndexFields = mango_selector:index_fields(Selector), 
+    twig:log(notice, "Index Fields ~p", [IndexFields]),
+    case {IndexFields, contains_op(Selector,<<"$text">>)} of
+        {_, true} -> mango_cursor_text;
+        {[], _} -> mango_cursor_text;
+        {_, false} -> mango_cursor_view
+    end.
+
+%% Checks to see if the selector is using a $text operator somewhere.
+% %% Return a mango_cursor_text for text cursor.
+% index_cursor_type(<<"$text">>) ->
+%     mango_cursor_text;
+% index_cursor_type(<<"$", _/binary>>)->
+%     mango_cursor_view;
+% index_cursor_type(Selector) when is_list(Selector) ->
+%     Types = lists:map(fun (Arg) ->
+%         index_cursor_type(Arg)
+%     end, Selector),
+%     case lists:member(mango_cursor_text, Types) of
+%         true -> mango_cursor_text;
+%         false -> mango_cursor_view
+%     end;
+% index_cursor_type(Selector)  when is_tuple(Selector)->
+%     Types = lists:map(fun (Arg) ->
+%         index_cursor_type(Arg)
+%     end, tuple_to_list(Selector)),
+%     case lists:member(mango_cursor_text, Types) of
+%         true -> mango_cursor_text;
+%         false -> mango_cursor_view
+%     end;
+% index_cursor_type(_) ->
+%     mango_cursor_view.

@@ -49,8 +49,11 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
         user_fun = UserFun,
         user_acc = UserAcc
     },
+    twig:log(notice, "Idx ~p", [Idx]),
+    twig:log(notice, "Ranges ~p", [Cursor#cursor.ranges]),
     BaseArgs = #view_query_args{
         view_type = red_map,
+
         start_key = mango_idx:start_key(Idx, Cursor#cursor.ranges),
         end_key = mango_idx:end_key(Idx, Cursor#cursor.ranges),
         include_docs = true

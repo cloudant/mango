@@ -295,7 +295,12 @@ info(mango_text_selector, {invalid_selector, Arg}) ->
         <<"invalid_selector">>,
         fmt("Selector was invalid: ~w.", [Arg])
     };
-
+info(mango_text_selector, {no_usable_index, operator_unsupported}) ->
+    {
+        400,
+        <<"no_usable_index">>,
+        <<"There is no operator in this selector can used with an index.">>
+    };
 info(mango_util, {invalid_ddoc_lang, Lang}) ->
     {
         400,
@@ -312,4 +317,5 @@ info(Module, Reason) ->
 
 
 fmt(Format, Args) ->
+    twig:log(notice, "error args ~p", [Args]),
     iolist_to_binary(io_lib:format(Format, Args)).

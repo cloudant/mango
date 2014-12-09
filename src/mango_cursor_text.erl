@@ -13,16 +13,19 @@
 
 
 create(Db, Selector0, Opts) ->
-    Selector = mango_text_selector:normalize(Selector0),
+    Selector = mango_selector:normalize(Selector0),
     Fields = case couch_util:get_value(fields, Opts, all_fields) of
         all_fields -> [];
         <<"all_fields">> -> [];
         Else -> Else
     end,
     IndexFields = [<<"default">> | Fields],
-    twig:log(notice, "Index Fields ~p", [IndexFields]),
+    % twig:log(notice, "Index Fields ~p", [IndexFields]),
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
+    if UsableIndexes /= [] -> ok; true ->
+        ?MANGO_ERROR({no_usable_index, operator_unsupported})
+    end,
     SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
     Index = choose_best_index(SortIndexes, IndexFields),
     Limit = couch_util:get_value(limit, Opts, 50),
@@ -50,16 +53,19 @@ execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
-    QueryArgs0 = parse_selector(Cursor0#cursor.selector),
-    SortQuery = sort_query(Opts),
-    QueryArgs = QueryArgs0#index_query_args{
+    % twig:log(notice, "Cursor Selector ~p", [Cursor0#cursor.selector]),
+    Query = mango_text_selector:parse_selector(Cursor0#cursor.selector),
+    % SortQuery = sort_query(Opts),
+    QueryArgs = #index_query_args{
+        q = Query,
         include_docs = true,
-        limit = Limit,
-        sort=SortQuery
+        limit = Limit
+        % sort=SortQuery
     },
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, Bookmark0, _, Hits0, _, _} ->
-            Hits = hits_to_json(DbName, true, Hits0),
+            Hits = hits_to_json(DbName, true, Hits0, Cursor0#cursor.selector),
+            % twig:log(notice, "Hits ~p", [Hits]),
             Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark0),
             UserAcc1 = try UserFun({row, {[{bookmark, Bookmark}]}}, UserAcc) of
                 {ok, NewAcc} -> NewAcc;
@@ -106,44 +112,6 @@ ddocid(Idx) ->
     end.
 
 
-parse_selector({[{<<"$text">>, Value} | Opts]}) when is_binary(Value) ->
-    IndexQueryArgs = parse_options(Opts),
-    IndexQueryArgs#index_query_args{q = Value};
-parse_selector({[{<<"$text">>, Value} | Opts]}) when is_integer(Value) ->
-    BinVal = list_to_binary(integer_to_list(Value)),
-    IndexQueryArgs = parse_options(Opts),
-   IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>, Value} | Opts]}) when is_float(Value) ->
-    BinVal = list_to_binary(float_to_list(Value)),
-    IndexQueryArgs = parse_options(Opts),
-    IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>, Value}, Opts]}) when is_boolean(Value) ->
-    Query = case Value of
-        true -> <<"true">>;
-        false -> <<"false">>
-    end,
-    IndexQueryArgs = parse_options(Opts),
-    IndexQueryArgs#index_query_args{q = Query}.
-
-parse_options([]) ->
-    #index_query_args{};
-parse_options(SearchOptions) ->
-    [{<<"$options">>, {Options}}] = SearchOptions,
-    lists:foldl (fun (Option, QueryArgsAcc) ->
-        parse_option(Option, QueryArgsAcc)
-    end, #index_query_args{}, Options).
-
-parse_option({<<"$bookmark">>, Val}, IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{bookmark=Val};
-parse_option({<<"$counts">>, Val}, IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{counts=Val};
-parse_option({<<"$ranges">>, Val}, IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{ranges=Val};
-
-parse_option({Option, _}, _) ->
-    ?MANGO_ERROR({unknown_option, {option, Option}}).
-
-
 find_usable_indexes(Possible, []) ->
     ?MANGO_ERROR({no_usable_index, {fields, Possible}});
 %% If the user did not specify any fields, then return all existing text indexes
@@ -182,24 +150,24 @@ choose_best_index(Indexes, IndexFields) ->
             hd(Indexes)
     end.
 
-%% Copied Over From Dreyfus. Refactor later when dreyfus limit=all branch
-%% is merged.
-facets_to_json(Facets) ->
-    {[facet_to_json(F) || F <- Facets]}.
-
-facet_to_json({K, V, []}) ->
-    {hd(K), V};
-facet_to_json({K0, _V0, C0}) ->
-    C2 = [{tl(K1), V1, C1} || {K1, V1, C1} <- C0],
-    {hd(K0), facets_to_json(C2)}.
-
-hits_to_json(DbName, IncludeDocs, Hits) ->
+hits_to_json(DbName, IncludeDocs, Hits, Selector) ->
     {Ids, HitData} = lists:unzip(lists:map(fun get_hit_data/1, Hits)),
     if IncludeDocs ->
         {ok, JsonDocs} = dreyfus_fabric:get_json_docs(DbName, Ids),
+        % JsonDocs0 = case mango_selector:contains_op(Selector, [<<"$size">>]) of
+        %     true ->
+        %         filter_results(Selector, JsonDocs);
+        %     false ->
+        %         JsonDocs
+        % end,
+        % case JsonDocs0 of
+        %     [] -> 
+        %         [];
+        %     _ ->
         lists:zipwith(fun({Id, Order, Fields}, {Id, Doc}) ->
-                {[{id, Id}, {order, Order}, {fields, {Fields}}, Doc]}
-            end, HitData, JsonDocs);
+            {[{id, Id}, {order, Order}, {fields, {Fields}}, Doc]}
+        end, HitData, JsonDocs);
+        % end;
     true ->
         lists:map(fun({Id, Order, Fields}) ->
             {[{id, Id}, {order, Order}, {fields, {Fields}}]}
@@ -210,3 +178,11 @@ get_hit_data(Hit) ->
     Id = couch_util:get_value(<<"_id">>, Hit#hit.fields),
     Fields = lists:keydelete(<<"_id">>, 1, Hit#hit.fields),
     {Id, {Id, Hit#hit.order, Fields}}.
+
+filter_results(Selector, JsonDocs) ->
+    twig:log(notice, "Selector in Filter ~p", [Selector]),
+    twig:log(notice, "JsonDocs ~p", [JsonDocs]),
+    lists:filter(fun ({DocId, {doc, Doc}}) -> 
+        twig:log(notice, "Doc in Filter ~p", [Doc]),
+        mango_selector:match(Selector, Doc)
+    end, JsonDocs).
