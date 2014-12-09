@@ -5,7 +5,8 @@
     normalize/1,
     index_fields/1,
     range/2,
-    match/2
+    match/2,
+    index_cursor_type/1
 ]).
 
 
@@ -170,6 +171,12 @@ norm_ops({[{<<"$size">>, Arg}]}) when is_integer(Arg), Arg >= 0 ->
 norm_ops({[{<<"$size">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$size', Arg});
 
+%% text seach operators
+norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
+    {[{<<"$text">>, Arg}]};
+norm_ops({[{<<"$text">>, Arg}]}) ->
+    ?MANGO_ERROR({bad_arg, '$text', Arg});
+
 % Terminals where we can't perform any validation
 % on the value because any value is acceptable.
 norm_ops({[{<<"$lt">>, _}]} = Cond) ->
@@ -261,6 +268,9 @@ norm_fields({[{<<"$nor">>, Args}]}, Path) ->
 norm_fields({[{<<"$elemMatch">>, Arg}]}, Path) ->
     Cond = {[{<<"$elemMatch">>, norm_fields(Arg)}]},
     {[{Path, Cond}]};
+
+norm_fields({[{<<"$text">>, _}]} = Cond, <<>>) ->
+    {[{<<"default">>, Cond}]};
 
 % Any other operator is a terminal below which no
 % field names should exist. Set the path to this
@@ -410,6 +420,8 @@ indexable({[{<<"$eq">>, _}]}) ->
 indexable({[{<<"$gt">>, _}]}) ->
     true;
 indexable({[{<<"$gte">>, _}]}) ->
+    true;
+indexable({[{<<"$text">>, _}]}) ->
     true;
 
 % All other operators are currently not indexable.
@@ -717,3 +729,28 @@ match({[{Field, Cond}]}, Value, Cmp) ->
 
 match({Props} = Sel, _Value, _Cmp) when length(Props) > 1 ->
     erlang:error({unnormalized_selector, Sel}).
+
+%% Checks to see if the selector is using a $text operator somewhere.
+%% Return a mango_cursor_text for text cursor.
+index_cursor_type(<<"$text">>) ->
+    mango_cursor_text;
+index_cursor_type(<<"$", _/binary>>)->
+    mango_cursor_view;
+index_cursor_type(Selector) when is_list(Selector) ->
+    Types = lists:map(fun (Arg) ->
+        index_cursor_type(Arg)
+    end, Selector),
+    case lists:member(mango_cursor_text, Types) of
+        true -> mango_cursor_text;
+        false -> mango_cursor_view
+    end;
+index_cursor_type(Selector)  when is_tuple(Selector)->
+    Types = lists:map(fun (Arg) ->
+        index_cursor_type(Arg)
+    end, tuple_to_list(Selector)),
+    case lists:member(mango_cursor_text, Types) of
+        true -> mango_cursor_text;
+        false -> mango_cursor_view
+    end;
+index_cursor_type(_) ->
+    mango_cursor_view.
