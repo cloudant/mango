@@ -160,21 +160,22 @@ construct_analyzer({Props}) ->
         _ ->
             {true, <<"standard">>}
         end,
-    Fields = couch_util:get_value(fields, Props, []),
-    PerFieldAnalyzerList = lists:foldl(fun ({Field}, Acc) ->
-        {<<"field">>, FieldName} = lists:keyfind(<<"field">>, 1, Field),
-        % twig:log(notice, "FieldName: ~p", [FieldName]),
-        {<<"type">>, FieldType} = lists:keyfind(<<"type">>, 1, Field),
-        % twig:log(notice, "FieldType: ~p", [FieldType]),
-        case lists:keyfind(<<"analyzer">>, 1, Field) of
-            false ->
-                Acc;
-            {<<"analyzer">>, PerFieldAnalyzer} ->
-                 % twig:log(notice, "pfa: ~p", [PerFieldAnalyzer]),
-                [{<<FieldName/binary, ":", FieldType/binary>>, PerFieldAnalyzer} | Acc]
-        end
-    end,[],Fields),
-    % twig:log(notice, "PerFieldAnalyzerList: ~p", [PerFieldAnalyzerList]),
+    Fields = couch_util:get_value(fields, Props, all_fields),
+    PerFieldAnalyzerList = case Fields of
+        all_fields ->
+            [];
+        _ ->
+            lists:foldl(fun ({Field}, Acc) ->
+            {<<"field">>, FieldName} = lists:keyfind(<<"field">>, 1, Field),
+            {<<"type">>, FieldType} = lists:keyfind(<<"type">>, 1, Field),
+            case lists:keyfind(<<"analyzer">>, 1, Field) of
+                false ->
+                    Acc;
+                {<<"analyzer">>, PerFieldAnalyzer} ->
+                    [{<<FieldName/binary, ":", FieldType/binary>>, PerFieldAnalyzer} | Acc]
+            end
+            end,[],Fields)
+        end,
     FinalAnalyzerDef = case DefaultField of
         true ->
            [{<<"default">>, DefaultFieldAnalyzer} | PerFieldAnalyzerList];
@@ -187,4 +188,3 @@ construct_analyzer({Props}) ->
         _ ->
             {[{<<"name">>, <<"perfield">>}, {<<"default">>, DefaultAnalyzer},  {<<"fields">>, {FinalAnalyzerDef}}]}
     end.
-
