@@ -13,7 +13,7 @@
 
 
 create(Db, Selector0, Opts) ->
-    Selector = mango_text_selector:normalize(Selector0),
+    Selector = mango_selector:normalize(Selector0),
     Fields = case couch_util:get_value(fields, Opts, all_fields) of
         all_fields -> [];
         <<"all_fields">> -> [];
@@ -50,12 +50,14 @@ execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
-    QueryArgs0 = parse_selector(Cursor0#cursor.selector),
-    SortQuery = sort_query(Opts),
-    QueryArgs = QueryArgs0#index_query_args{
+    twig:log(notice, "Cursor Selector ~p", [Cursor0#cursor.selector]),
+    Query = parse_selector(Cursor0#cursor.selector),
+    % SortQuery = sort_query(Opts),
+    QueryArgs = #index_query_args{
+        q = Query,
         include_docs = true,
-        limit = Limit,
-        sort=SortQuery
+        limit = Limit
+        % sort=SortQuery
     },
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, Bookmark0, _, Hits0, _, _} ->
@@ -105,43 +107,94 @@ ddocid(Idx) ->
             Else
     end.
 
+get_type(Value) when is_binary(Value) ->
+    {<<"string">>, Value};
+get_type(Value) when is_integer(Value) ->
+    {<<"number">>, list_to_binary(integer_to_list(Value))};
+get_type(Value) when is_float(Value) ->
+    {<<"number">>, list_to_binary(float_to_list(Value))};
+get_type(Value) when is_boolean(Value) ->
+    case Value of
+        true -> {<<"bool">>, <<"true">>};
+        false -> {<<"bool">>, <<"false">>}
+    end.
 
-parse_selector({[{<<"$text">>, Value} | Opts]}) when is_binary(Value) ->
-    IndexQueryArgs = parse_options(Opts),
-    IndexQueryArgs#index_query_args{q = Value};
-parse_selector({[{<<"$text">>, Value} | Opts]}) when is_integer(Value) ->
-    BinVal = list_to_binary(integer_to_list(Value)),
-    IndexQueryArgs = parse_options(Opts),
-   IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>, Value} | Opts]}) when is_float(Value) ->
-    BinVal = list_to_binary(float_to_list(Value)),
-    IndexQueryArgs = parse_options(Opts),
-    IndexQueryArgs#index_query_args{q = BinVal};
-parse_selector({[{<<"$text">>, Value}, Opts]}) when is_boolean(Value) ->
-    Query = case Value of
-        true -> <<"true">>;
-        false -> <<"false">>
-    end,
-    IndexQueryArgs = parse_options(Opts),
-    IndexQueryArgs#index_query_args{q = Query}.
 
-parse_options([]) ->
-    #index_query_args{};
-parse_options(SearchOptions) ->
-    [{<<"$options">>, {Options}}] = SearchOptions,
-    lists:foldl (fun (Option, QueryArgsAcc) ->
-        parse_option(Option, QueryArgsAcc)
-    end, #index_query_args{}, Options).
 
-parse_option({<<"$bookmark">>, Val}, IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{bookmark=Val};
-parse_option({<<"$counts">>, Val}, IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{counts=Val};
-parse_option({<<"$ranges">>, Val}, IndexQueryArgs) ->
-    IndexQueryArgs#index_query_args{ranges=Val};
+parse_selector({[{<<"$eq">>, Value}]}) ->
+    get_type(Value);
+parse_selector({[{<<"$ne">>, Value}]}) ->
+    {negative, get_type(Value)};
+parse_selector({[{<<"$not">>, Value}]}) ->
+    {negative, parse_selector(Value)};
+parse_selector({[{<<"$text">>, Value}]}) ->
+    get_type(Value);
 
-parse_option({Option, _}, _) ->
-    ?MANGO_ERROR({unknown_option, {option, Option}}).
+parse_selector({[{<<"$and">>, Args}]}) when is_list(Args) ->
+    lists:foldl(fun(Arg, Acc) ->
+        Val = parse_selector(Arg),
+        case Acc of
+            <<>> ->
+                <<"(",Val/binary,")">>;
+            _ -> <<Acc/binary," AND ","(",Val/binary,")">>
+        end
+    end,<<>>,Args);
+
+parse_selector({[{<<"$or">>, Args}]}) when is_list(Args) ->
+    lists:foldl(fun(Arg, Acc) ->
+        Val = parse_selector(Arg),
+        case Acc of
+            <<>> ->
+                <<"(",Val/binary,")">>;
+            _ -> <<Acc/binary," OR ","(",Val/binary,")">>
+        end
+    end, <<>>, Args);
+parse_selector({[{Field, {[{<<"$in">>, Args}]}}]}) when is_list(Args) ->
+    lists:foldl(fun(Arg, Acc) ->
+        {Type, Val} = get_type(Arg),
+        twig:log(notice, "Type ~p", [Type]),
+        twig:log(notice, "Val ~p", [Val]),
+        case Acc of
+            <<>> ->
+                <<"(",Field/binary,"\\:",Type/binary,":","",Val/binary,")">>;
+            _ -> <<Acc/binary," OR ","(",Field/binary,"\\:",Type/binary,":", Val/binary,")">>
+        end
+    end,<<>>,Args);
+parse_selector({[{<<"default">>, Cond}]}) ->
+    Val = parse_selector(Cond),
+    case Val of
+        {negative, {Type, Val0}} ->
+            <<"NOT default:",Val0/binary>>;
+        {Type, Val0} ->
+             <<"default:",Val0/binary>>
+    end;
+% A {Field: Cond} pair
+parse_selector({[{Field, Cond}]}) ->
+    Val = parse_selector(Cond),
+    case {Field,Val} of
+        {<<"default">>, {negative, {Type, Val0}}} ->
+            <<"NOT ",Field/binary,"\\:",Type/binary,":",Val0/binary>>;
+        {Type, Val0} ->
+             <<Field/binary,"\\:",Type/binary,":",Val0/binary>>
+    end.
+
+% parse_options([]) ->
+%     #index_query_args{};
+% parse_options(SearchOptions) ->
+%     [{<<"$options">>, {Options}}] = SearchOptions,
+%     lists:foldl (fun (Option, QueryArgsAcc) ->
+%         parse_option(Option, QueryArgsAcc)
+%     end, #index_query_args{}, Options).
+
+% parse_option({<<"$bookmark">>, Val}, IndexQueryArgs) ->
+%     IndexQueryArgs#index_query_args{bookmark=Val};
+% parse_option({<<"$counts">>, Val}, IndexQueryArgs) ->
+%     IndexQueryArgs#index_query_args{counts=Val};
+% parse_option({<<"$ranges">>, Val}, IndexQueryArgs) ->
+%     IndexQueryArgs#index_query_args{ranges=Val};
+
+% parse_option({Option, _}, _) ->
+%     ?MANGO_ERROR({unknown_option, {option, Option}}).
 
 
 find_usable_indexes(Possible, []) ->

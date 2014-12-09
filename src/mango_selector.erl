@@ -171,6 +171,12 @@ norm_ops({[{<<"$size">>, Arg}]}) when is_integer(Arg), Arg >= 0 ->
 norm_ops({[{<<"$size">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$size', Arg});
 
+%% text seach operators
+norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
+    {[{<<"$text">>, Arg}]};
+norm_ops({[{<<"$text">>, Arg}]}) ->
+    ?MANGO_ERROR({bad_arg, '$text', Arg});
+
 % Terminals where we can't perform any validation
 % on the value because any value is acceptable.
 norm_ops({[{<<"$lt">>, _}]} = Cond) ->
@@ -262,6 +268,9 @@ norm_fields({[{<<"$nor">>, Args}]}, Path) ->
 norm_fields({[{<<"$elemMatch">>, Arg}]}, Path) ->
     Cond = {[{<<"$elemMatch">>, norm_fields(Arg)}]},
     {[{Path, Cond}]};
+
+norm_fields({[{<<"$text">>, _}]} = Cond, <<>>) ->
+    {[{<<"default">>, Cond}]};
 
 % Any other operator is a terminal below which no
 % field names should exist. Set the path to this
@@ -412,10 +421,8 @@ indexable({[{<<"$gt">>, _}]}) ->
     true;
 indexable({[{<<"$gte">>, _}]}) ->
     true;
-% indexable({[{<<"$text">>, _}]}) ->
-%     true;
-% indexable({[{<<"$text">>, _},_]}) ->
-%     true;
+indexable({[{<<"$text">>, _}]}) ->
+    true;
 
 % All other operators are currently not indexable.
 % This is also a subtle assertion that we don't
