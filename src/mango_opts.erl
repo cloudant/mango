@@ -166,10 +166,6 @@ validate_idx_name(Else) ->
 
 
 validate_selector({Props}) ->
-    % Norm = case mango_selector:index_cursor_type({Props}) of
-    %     mango_cursor_text -> mango_text_selector:normalize({Props});
-    %     _ -> mango_selector:normalize({Props})
-    % end,
     Norm = mango_selector:normalize({Props}),
     {ok, Norm};
 validate_selector(Else) ->

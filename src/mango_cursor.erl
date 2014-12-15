@@ -18,7 +18,6 @@
 
 create(Db, Selector, Opts) ->
     Mod = mango_selector:index_cursor_type(Selector),
-    twig:log(notice, "Mod: ~p",[Mod]),
     Mod:create(Db, Selector, Opts).
 
 
@@ -48,7 +47,11 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
         Cols = mango_idx:columns(Idx),
         case mango_idx:type(Idx) of
             <<"text">> ->
-                sets:is_subset(sets:from_list(Fields), sets:from_list(Cols));
+                case Cols of
+                    all_fields -> true;
+                    _ -> sets:is_subset(sets:from_list(Fields),
+                        sets:from_list(Cols))
+                end;
             _ ->
                 lists:prefix(Fields, Cols)
         end
@@ -65,4 +68,5 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     if FinalIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, sort_field})
     end,
+
     FinalIndexes.

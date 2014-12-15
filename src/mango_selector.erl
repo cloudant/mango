@@ -36,7 +36,6 @@ normalize(Selector) ->
         false ->
             ok
     end,
-    twig:log(notice, "NProps ~p", [NProps]),
     {NProps}.
 
 % This function returns a list of indexes that
@@ -169,13 +168,13 @@ norm_ops({[{<<"$elemMatch">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$elemMatch', Arg});
 
 norm_ops({[{<<"$size">>, Arg}]}) when is_integer(Arg), Arg >= 0 ->
-    twig:log(notice, "In Size Ops Norm ~p ", [Arg]),
     {[{<<"$size">>, Arg}]};
 norm_ops({[{<<"$size">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$size', Arg});
 
 %% text seach operators
-norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg); is_boolean(Arg) ->
+norm_ops({[{<<"$text">>, Arg}]}) when is_binary(Arg); is_number(Arg);
+        is_boolean(Arg) ->
     {[{<<"$text">>, Arg}]};
 norm_ops({[{<<"$text">>, Arg}]}) ->
     ?MANGO_ERROR({bad_arg, '$text', Arg});
@@ -610,9 +609,7 @@ match({[{<<"$and">>, Args}]}, Value, Cmp) ->
     lists:all(Pred, Args);
 
 match({[{<<"$or">>, Args}]}, Value, Cmp) ->
-    % twig:log(notice, "come in here match or*** Arg ~p, Value~p", [Args,Value]),
-    Pred = fun(SubSel) -> twig:log(notice, "come in here or*** SubSelector ~p", [SubSel]),
-        match(SubSel, Value, Cmp) end,
+    Pred = fun(SubSel) -> match(SubSel, Value, Cmp) end,
     lists:any(Pred, Args);
 
 match({[{<<"$not">>, Arg}]}, Value, Cmp) ->
@@ -637,7 +634,6 @@ match({[{<<"$all">>, _Args}]}, _Values, _Cmp) ->
 % Matches when any element in values matches the
 % sub-selector Arg.
 match({[{<<"$elemMatch">>, Arg}]}, Values, Cmp) when is_list(Values) ->
-    twig:log(notice, "come in here match elemMAtch*** Arg ~p, Value~p", [Arg,Values]),
     try
         lists:foreach(fun(V) ->
             case match(Arg, V, Cmp) of
@@ -686,11 +682,6 @@ match({[{<<"$exists">>, ShouldExist}]}, Value, _Cmp) ->
 match({[{<<"$type">>, Arg}]}, Value, _Cmp) when is_binary(Arg) ->
     Arg == mango_json:type(Value);
 
-%% always return true since this is mainly for post hoc filtering
-match({[{_, {[{<<"$text">>, _}]}}]}, _, _) ->
-    twig:log(notice, "come in here match text ****"),
-    true;
-
 match({[{<<"$mod">>, [D, R]}]}, Value, _Cmp) when is_integer(Value) ->
     Value rem D == R;
 match({[{<<"$mod">>, _}]}, _Value, _Cmp) ->
@@ -706,7 +697,6 @@ match({[{<<"$regex">>, _}]}, _Value, _Cmp) ->
     false;
 
 match({[{<<"$size">>, Arg}]}, Values, _Cmp) when is_list(Values) ->
-    twig:log(notice, "come in here match size ****"),
     length(Values) == Arg;
 match({[{<<"$size">>, _}]}, _Value, _Cmp) ->
     false;
@@ -753,35 +743,9 @@ contains_op(_, _) ->
     false.
 
 index_cursor_type(Selector) ->
-    IndexFields = mango_selector:index_fields(Selector), 
-    twig:log(notice, "Index Fields ~p", [IndexFields]),
-    case {IndexFields, contains_op(Selector,<<"$text">>)} of
+    IndexFields = mango_selector:index_fields(Selector),
+    case {IndexFields, contains_op(Selector, <<"$text">>)} of
         {_, true} -> mango_cursor_text;
         {[], _} -> mango_cursor_text;
         {_, false} -> mango_cursor_view
     end.
-
-%% Checks to see if the selector is using a $text operator somewhere.
-% %% Return a mango_cursor_text for text cursor.
-% index_cursor_type(<<"$text">>) ->
-%     mango_cursor_text;
-% index_cursor_type(<<"$", _/binary>>)->
-%     mango_cursor_view;
-% index_cursor_type(Selector) when is_list(Selector) ->
-%     Types = lists:map(fun (Arg) ->
-%         index_cursor_type(Arg)
-%     end, Selector),
-%     case lists:member(mango_cursor_text, Types) of
-%         true -> mango_cursor_text;
-%         false -> mango_cursor_view
-%     end;
-% index_cursor_type(Selector)  when is_tuple(Selector)->
-%     Types = lists:map(fun (Arg) ->
-%         index_cursor_type(Arg)
-%     end, tuple_to_list(Selector)),
-%     case lists:member(mango_cursor_text, Types) of
-%         true -> mango_cursor_text;
-%         false -> mango_cursor_view
-%     end;
-% index_cursor_type(_) ->
-%     mango_cursor_view.

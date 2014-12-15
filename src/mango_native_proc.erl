@@ -130,7 +130,8 @@ get_text_entries({IdxProps}, Doc0) ->
         _ ->
             lists:foldl(fun({Field}, Acc) ->
                 FieldName= couch_util:get_value(<<"field">>, Field),
-                FieldType= couch_util:get_value(<<"type">>, Field, <<"string">>),
+                FieldType= couch_util:get_value(<<"type">>, Field,
+                    <<"string">>),
                 get_textfield_values(Doc, {FieldName, FieldType}, Acc)
             end, [], Fields)
     end,
@@ -140,7 +141,7 @@ get_text_entries({IdxProps}, Doc0) ->
         {[{<<"enabled">>, false}]} ->
             Results0;
         _ ->
-            get_default_values(Doc,Results0)
+            get_default_values(Doc, Results0)
         end,
     case lists:member(not_found, Results) of
         true ->
@@ -162,25 +163,28 @@ filter_doc(Selector0, Doc) ->
         {true, _} -> Doc
     end.
 
-
+%% Gets field/value pairs from user provided field
 get_textfield_values(Doc, {FieldName, FieldType}, Acc) ->
     Path = re:split(FieldName, <<"\\.">>),
     get_textfield_values(Doc, {FieldName, FieldType}, Path, Acc).
 
-get_textfield_values(Values, {FieldName, FieldType}, [SubName | Rest], Acc) when is_list(Values)->
+get_textfield_values(Values, {FieldName, FieldType}, [SubName | Rest], Acc)
+        when is_list(Values)->
     case {SubName, Rest} of
         {<<"[]">>, []} ->
             lists:foldl(fun (Value, SubAcc) ->
                 case match_text_type(FieldType, Value) of
                     true ->
-                        [[<<FieldName/binary, ":", FieldType/binary>>, Value, []] | SubAcc];
+                        [[<<FieldName/binary, ":", FieldType/binary>>, Value,
+                            []] | SubAcc];
                     false ->
                         SubAcc
                  end
             end, Acc, Values);
         {<<"[]">>, _} ->
             lists:foldl(fun (Value, SubAcc) ->
-                get_textfield_values(Value, {FieldName, FieldType}, Rest, SubAcc)    
+                get_textfield_values(Value, {FieldName, FieldType}, Rest,
+                    SubAcc)
             end, Acc, Values);
         {_, _} ->
             Acc
@@ -197,7 +201,8 @@ get_textfield_values({Values}, {FieldName, FieldType}, [SubName | Rest], Acc) ->
         {_, [], Value} ->
             case match_text_type(FieldType, Value) of
                 true ->
-                    [[<<FieldName/binary, ":", FieldType/binary>>, Value, []] | Acc];
+                    [[<<FieldName/binary, ":", FieldType/binary>>,
+                        Value, []] | Acc];
                 false ->
                     Acc
              end;
@@ -208,6 +213,7 @@ get_textfield_values(_, _ , _ , Acc) ->
     Acc.
 
 
+%% Gets all field/value pairs from document
 get_all_textfield_values([], Acc) ->
     Acc;
 get_all_textfield_values({Doc}, Acc) when is_list(Doc) ->
@@ -216,38 +222,50 @@ get_all_textfield_values({Doc}, Acc) when is_list(Doc) ->
     end, Acc, Doc);
 get_all_textfield_values({<<Field/binary>>, <<Value/binary>>}, Acc) ->
     [[<<Field/binary, ":string">>, Value, []] | Acc];
-get_all_textfield_values({<<Field/binary>>, Value}, Acc) when is_number(Value) ->
+get_all_textfield_values({<<Field/binary>>, Value}, Acc)
+        when is_number(Value) ->
     [[<<Field/binary, ":number">>, Value, []] | Acc];
-get_all_textfield_values({<<Field/binary>>, Value}, Acc) when is_boolean(Value) ->
+get_all_textfield_values({<<Field/binary>>, Value}, Acc)
+        when is_boolean(Value) ->
     [[<<Field/binary, ":boolean">>, Value, []] | Acc];
 %% field : array
-get_all_textfield_values({<<Field/binary>>, Values}, Acc) when is_list(Values) ->
-    Acc0 = [[<<Field/binary,".[]:length">>, length(Values), []] | Acc],
+get_all_textfield_values({<<Field/binary>>, Values}, Acc)
+        when is_list(Values) ->
+    Acc0 = [[<<Field/binary,  ".[]:length">>, length(Values), []] | Acc],
     lists:foldl(fun(ListVal, SubAcc) ->
         get_all_textfield_values({<<Field/binary, ".[]">>, ListVal}, SubAcc)
     end, Acc0, Values);
 %% field : object
-get_all_textfield_values({<<Field/binary>>, {Values}}, Acc) when is_list(Values) ->
+get_all_textfield_values({<<Field/binary>>, {Values}}, Acc)
+        when is_list(Values) ->
     lists:foldl(fun(ListVal, SubAcc) ->
         get_all_textfield_values({<<Field/binary>>, ListVal}, SubAcc)
     end, Acc, Values);
-get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, <<Value/binary>>}}, Acc) ->
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>,
+        <<Value/binary>>}}, Acc) ->
     [[<<Field/binary, ".", SubField/binary, ":string">>, Value, []] | Acc];
-get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Value}}, Acc) when is_number(Value) ->
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Value}}, Acc)
+        when is_number(Value) ->
     [[<<Field/binary, ".", SubField/binary, ":number">>, Value, []] | Acc];
-get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Value}}, Acc) when is_boolean(Value) ->
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Value}}, Acc)
+        when is_boolean(Value) ->
     [[<<Field/binary, ".", SubField/binary, ":boolean">>, Value, []] | Acc];
-get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Values}}, Acc) when is_list(Values) ->
-    Acc0 = [[<<Field/binary,".[]:length">>, length(Values), []] | Acc],
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, Values}}, Acc)
+        when is_list(Values) ->
+    Acc0 = [[<<Field/binary, ".[]:length">>, length(Values), []] | Acc],
     lists:foldl(fun(ListVal, SubAcc) ->
-        get_all_textfield_values({<<Field/binary, ".[].", SubField/binary>>, ListVal}, SubAcc)
+        get_all_textfield_values({<<Field/binary, ".[].", SubField/binary>>,
+            ListVal}, SubAcc)
     end, Acc0, Values);
-get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, {Values}}}, Acc) when is_list(Values) ->
+get_all_textfield_values({<<Field/binary>>, {<<SubField/binary>>, {Values}}},
+        Acc) when is_list(Values) ->
     lists:foldl(fun(ListVal, SubAcc) ->
-        get_all_textfield_values({<<Field/binary, ".", SubField/binary>>, ListVal}, SubAcc)
+        get_all_textfield_values({<<Field/binary, ".", SubField/binary>>,
+            ListVal}, SubAcc)
     end, Acc, Values).
 
 
+%% Gets all string values from the document and associates it with "default"
 get_default_values([], Acc) ->
     Acc;
 get_default_values({Doc}, Acc) when is_list(Doc) ->
@@ -278,4 +296,3 @@ match_text_type(<<"boolean">>, Value) when is_boolean(Value) ->
     true;
 match_text_type(_, _)  ->
     false.
-

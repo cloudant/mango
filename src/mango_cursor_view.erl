@@ -1,11 +1,11 @@
 -module(mango_cursor_view).
 
 -export([
-    execute/3
+    execute/3, create/3
 ]).
 
 -export([
-    handle_message/2,create/3
+    handle_message/2
 ]).
 
 
@@ -15,16 +15,18 @@
 
 create(Db, Selector0, Opts) ->
     Selector = mango_selector:normalize(Selector0),
-    IndexFields = mango_selector:index_fields(Selector),  
+    IndexFields = mango_selector:index_fields(Selector),
     FieldRanges = find_field_ranges(Selector, IndexFields),
 
     if IndexFields /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, operator_unsupported})
     end,
 
-    ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"json">>, <<"special">>]),
+    ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"json">>,
+        <<"special">>]),
     UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
-    SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
+    SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes,
+        Opts),
 
     Composited = composite_indexes(SortIndexes, FieldRanges),
     {Index, Ranges} = choose_best_index(Db, Composited),
@@ -49,8 +51,6 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
         user_fun = UserFun,
         user_acc = UserAcc
     },
-    twig:log(notice, "Idx ~p", [Idx]),
-    twig:log(notice, "Ranges ~p", [Cursor#cursor.ranges]),
     BaseArgs = #view_query_args{
         view_type = red_map,
 
@@ -62,11 +62,13 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
     CB = fun ?MODULE:handle_message/2,
     {ok, LastCursor} = case mango_idx:def(Idx) of
         all_docs ->
+            %twig:log(err, "Query: ~s all_docs~n  ~p", [Db#db.name, Args]),
             fabric:all_docs(Db, CB, Cursor, Args);
         _ ->
             % Normal view
             DDoc = ddocid(Idx),
             Name = mango_idx:name(Idx),
+            %twig:log(err, "Query: ~s ~s ~s~n  ~p", [Db#db.name, DDoc, Name, Args]),
             fabric:query_view(Db, DDoc, Name, CB, Cursor, Args)
     end,
     {ok, LastCursor#cursor.user_acc}.
@@ -159,8 +161,10 @@ choose_best_index(_DbName, IndexRanges) ->
 
 
 handle_message({total_and_offset, _, _} = _TO, Cursor) ->
+    %twig:log(err, "TOTAL AND OFFSET: ~p", [_TO]),
     {ok, Cursor};
 handle_message({row, {Props}}, Cursor) ->
+    %twig:log(err, "ROW: ~p", [Props]),
     case doc_member(Cursor#cursor.db, Props, Cursor#cursor.opts) of
         {ok, Doc} ->
             case mango_selector:match(Cursor#cursor.selector, Doc) of
@@ -175,8 +179,10 @@ handle_message({row, {Props}}, Cursor) ->
             {ok, Cursor}
     end;
 handle_message(complete, Cursor) ->
+    %twig:log(err, "COMPLETE", []),
     {ok, Cursor};
 handle_message({error, Reason}, _Cursor) ->
+    %twig:log(err, "ERROR: ~p", [Reason]),
     {error, Reason}.
 
 

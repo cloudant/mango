@@ -25,7 +25,8 @@ info(mango_cursor_text, {no_usable_index, operator_unsupported}) ->
     {
         400,
         <<"no_usable_index">>,
-        <<"There is no operator in this selector that can used with a text index.">>
+        <<"There is no operator in this selector that can used with a text
+            index.">>
     };
 info(mango_cursor_text, {no_usable_index, {fields, Possible}}) ->
     S0 = [binary_to_list(P) || P <- Possible],
@@ -33,7 +34,8 @@ info(mango_cursor_text, {no_usable_index, {fields, Possible}}) ->
     {
         400,
         <<"no_usable_index">>,
-        fmt("No text index exists for this selector, try indexing one of: ~s", [S1])
+        fmt("No text index exists for this selector, try indexing one of: ~s",
+            [S1])
     };
 info(mango_cursor_text, {text_search_error, {error, Error}}) ->
     {
@@ -212,9 +214,10 @@ info(mango_opts, {multiple_text_operator, {invalid_selector, BadSel}}) ->
     {
         400,
         <<"multiple_text_selector">>,
-        fmt("Selector cannot contain more than one $text operator: ~w", [BadSel])
+        fmt("Selector cannot contain more than one $text operator: ~w",
+            [BadSel])
     };
-    
+
 info(mango_selector, {invalid_selector, missing_field_name}) ->
     {
         400,
@@ -317,5 +320,4 @@ info(Module, Reason) ->
 
 
 fmt(Format, Args) ->
-    twig:log(notice, "error args ~p", [Args]),
     iolist_to_binary(io_lib:format(Format, Args)).

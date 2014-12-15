@@ -17,7 +17,6 @@
 
 validate(#idx{}=Idx) ->
     {ok, Def} = do_validate(Idx#idx.def),
-    %TODO: Validate the analyzer json? 
     {ok, Idx#idx{def=Def}}.
 
 
@@ -28,7 +27,8 @@ add(#doc{body={Props0}}=DDoc, Idx) ->
     end,
     NewText = make_text(Idx),
     Texts2 = lists:keystore(element(1, NewText), 1, Texts1, NewText),
-    Props1 = lists:keystore(<<"indexes">>, 1, Props0, {<<"indexes">>, {Texts2}}),
+    Props1 = lists:keystore(<<"indexes">>, 1, Props0, {<<"indexes">>,
+        {Texts2}}),
     {ok, DDoc#doc{body={Props1}}}.
 
 
@@ -57,13 +57,10 @@ from_ddoc({Props}) ->
         {<<"indexes">>, {Texts}} when is_list(Texts) ->
             lists:flatmap(fun({Name, {VProps}}) ->
                 Def = proplists:get_value(<<"index">>, VProps),
-                % {Opts0} = proplists:get_value(<<"options">>, VProps),
-                %Opts = lists:keydelete(<<"sort">>, 1, Opts0),
                 I = #idx{
                     type = <<"text">>,
                     name = Name,
                     def = Def
-                    % opts = Opts
                 },
                 % TODO: Validate the index definition
                 [I]
@@ -89,10 +86,11 @@ columns(Idx) ->
         <<"all_fields">> ->
             all_fields;
         _ ->
-            [{FieldName,FieldType} || {[{_, FieldName}, {_, FieldType}, _]} <- Fields]
+            [{FieldName, FieldType} || {[{_, FieldName},
+                {_, FieldType}, _]} <- Fields]
     end.
 
-    
+
 do_validate({Props}) ->
     {ok, Opts} = mango_opts:validate(Props, opts()),
     {ok, {Opts}};
@@ -115,7 +113,7 @@ def_to_json([{Key, Value} | Rest]) ->
 
 
 opts() ->
-    [   
+    [
         {<<"default_analyzer">>, [
             {tag, default_analyzer},
             {optional, true},
@@ -150,15 +148,15 @@ make_text(Idx) ->
 
 
 construct_analyzer({Props}) ->
-    % twig:log(notice, "Props: ~p", [Props]),
     DefaultAnalyzer = couch_util:get_value(default_analyzer, Props, "keyword"),
-    {DefaultField, DefaultFieldAnalyzer} = case lists:keyfind(default_field, 1, Props) of
-        {[{<<"enabled">>, true}, {<<"analyzer">>, Analyzer}]} ->
-            {true, Analyzer};
-        {[{<<"enabled">>, false}, _]} ->
-            {false, <<"standard">>};
-        _ ->
-            {true, <<"standard">>}
+    {DefaultField, DefaultFieldAnalyzer} =
+        case lists:keyfind(default_field, 1, Props) of
+            {[{<<"enabled">>, true}, {<<"analyzer">>, Analyzer}]} ->
+                {true, Analyzer};
+            {[{<<"enabled">>, false}, _]} ->
+                {false, <<"standard">>};
+            _ ->
+                {true, <<"standard">>}
         end,
     Fields = couch_util:get_value(fields, Props, all_fields),
     PerFieldAnalyzerList = case Fields of
@@ -172,9 +170,10 @@ construct_analyzer({Props}) ->
                 false ->
                     Acc;
                 {<<"analyzer">>, PerFieldAnalyzer} ->
-                    [{<<FieldName/binary, ":", FieldType/binary>>, PerFieldAnalyzer} | Acc]
+                    [{<<FieldName/binary, ":", FieldType/binary>>,
+                        PerFieldAnalyzer} | Acc]
             end
-            end,[],Fields)
+            end, [], Fields)
         end,
     FinalAnalyzerDef = case DefaultField of
         true ->
@@ -186,5 +185,6 @@ construct_analyzer({Props}) ->
         [] ->
             "keyword";
         _ ->
-            {[{<<"name">>, <<"perfield">>}, {<<"default">>, DefaultAnalyzer},  {<<"fields">>, {FinalAnalyzerDef}}]}
+            {[{<<"name">>, <<"perfield">>}, {<<"default">>, DefaultAnalyzer},
+                {<<"fields">>, {FinalAnalyzerDef}}]}
     end.

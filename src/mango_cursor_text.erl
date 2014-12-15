@@ -20,18 +20,18 @@ create(Db, Selector0, Opts) ->
         Else -> Else
     end,
     IndexFields = [<<"default">> | Fields],
-    % twig:log(notice, "Index Fields ~p", [IndexFields]),
     ExistingIndexes = mango_idx:filter_list(mango_idx:list(Db), [<<"text">>]),
     UsableIndexes = find_usable_indexes(IndexFields, ExistingIndexes),
     if UsableIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, operator_unsupported})
     end,
-    SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes, Opts),
+    SortIndexes = mango_cursor:get_sort_indexes(ExistingIndexes, UsableIndexes,
+        Opts),
     Index = choose_best_index(SortIndexes, IndexFields),
     Limit = couch_util:get_value(limit, Opts, 50),
     %% Currently set the Limit at 50. We want to set this
     %% in mango_opts to be consistent with view queries.
-    CapLimit = case Limit > 50 of 
+    CapLimit = case Limit > 50 of
         true -> 50;
         false -> Limit
     end,
@@ -49,13 +49,13 @@ create(Db, Selector0, Opts) ->
     }}.
 
 
-execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun, UserAcc) ->
+execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0,
+        UserFun, UserAcc) ->
     DbName = Db#db.name,
     DDoc = ddocid(Idx),
     IndexName = mango_idx:name(Idx),
-    % twig:log(notice, "Cursor Selector ~p", [Cursor0#cursor.selector]),
     Query = mango_text_selector:parse_selector(Cursor0#cursor.selector),
-    % SortQuery = sort_query(Opts),
+    SortQuery = sort_query(Opts),
     Bookmark0 = case get_bookmark(Opts) of
         <<>> -> nil;
         Else -> Else
@@ -64,38 +64,39 @@ execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun
         q = Query,
         include_docs = true,
         limit = Limit,
-        % sort=SortQuery,
-        bookmark=Bookmark0
+        sort = SortQuery,
+        bookmark = Bookmark0
     },
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, Bookmark1, _, Hits0, _, _} ->
             Hits = hits_to_json(DbName, true, Hits0),
-            % twig:log(notice, "Hits ~p", [Hits]),
             Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark1),
             UserAcc1 = try UserFun({row, {[{bookmark, Bookmark}]}}, UserAcc) of
                 {ok, NewAcc} -> NewAcc;
                 {stop, Acc} -> Acc
             catch
-                error:{error, Error}  -> ?MANGO_ERROR({text_search_error, {error, Error}})
+                error:{error, Error}  -> ?MANGO_ERROR({text_search_error,
+                    {error, Error}})
             end,
             {ok, lists:foldl(fun(Hit, HAcc) ->
                 try UserFun({row, Hit}, HAcc) of
                     {ok, HNewAcc} -> HNewAcc;
                     {stop, HAcc} -> HAcc
                 catch
-                    error:{error, HError}  -> ?MANGO_ERROR({text_search_error, {error, HError}})
+                    error:{error, HError}  -> ?MANGO_ERROR({text_search_error,
+                        {error, HError}})
                 end
             end, UserAcc1, Hits)};
         {error, Reason} ->
             ?MANGO_ERROR({text_search_error, {error, Reason}})
     end.
 
-%% Convert Query to Dreyfus sort specifications 
+%% Convert Query to Dreyfus sort specifications
 %% Covert <<"Field">>, <<"desc">> to <<"-Field">>
 %% and append to the dreyfus query
 sort_query(Opts) ->
     {sort, {Sort}} = lists:keyfind(sort, 1, Opts),
-    SortList = lists:map(fun(SortField) -> 
+    SortList = lists:map(fun(SortField) ->
         case SortField of
             {Field, <<"asc">>} -> Field;
             {Field, <<"desc">>} -> <<"-", Field/binary>>;
@@ -128,12 +129,11 @@ find_usable_indexes(Possible, []) ->
 find_usable_indexes([<<"default">>], Existing) ->
     Existing;
 find_usable_indexes(Possible, Existing) ->
-    % twig:log(notice,"Possible ~p", [Possible]),
     Usable = lists:foldl(fun(Idx, Acc) ->
         Columns = mango_idx:columns(Idx),
-        % twig:log(notice,"Columns ~p", [Columns]),
         %% Check to see if any of the Columns exist in our Possible Fields
-        case sets:is_subset(sets:from_list(Possible), sets:from_list(Columns)) of
+        case sets:is_subset(sets:from_list(Possible),
+            sets:from_list(Columns)) of
             true ->
                 [Idx | Acc];
             false ->
