@@ -65,5 +65,4 @@ limit_to_sort(ExistingIndexes, UsableIndexes, Sort) ->
     if FinalIndexes /= [] -> ok; true ->
         ?MANGO_ERROR({no_usable_index, sort_field})
     end,
-
     FinalIndexes.

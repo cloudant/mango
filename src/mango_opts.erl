@@ -98,6 +98,12 @@ validate_find({Props}) ->
             {optional, true},
             {default, false},
             {validator, fun mango_opts:is_boolean/1}
+        ]},
+        {<<"bookmark">>, [
+            {tag, bookmark},
+            {optional, true},
+            {default, <<>>},
+            {validator, fun mango_opts:is_string/1}
         ]}
     ],
     validate(Props, Opts).

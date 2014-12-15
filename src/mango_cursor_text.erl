@@ -56,17 +56,22 @@ execute(#cursor{db = Db, index = Idx, limit=Limit, opts=Opts} = Cursor0, UserFun
     % twig:log(notice, "Cursor Selector ~p", [Cursor0#cursor.selector]),
     Query = mango_text_selector:parse_selector(Cursor0#cursor.selector),
     % SortQuery = sort_query(Opts),
+    Bookmark0 = case get_bookmark(Opts) of
+        <<>> -> nil;
+        Else -> Else
+    end,
     QueryArgs = #index_query_args{
         q = Query,
         include_docs = true,
-        limit = Limit
-        % sort=SortQuery
+        limit = Limit,
+        % sort=SortQuery,
+        bookmark=Bookmark0
     },
     case dreyfus_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
-        {ok, Bookmark0, _, Hits0, _, _} ->
-            Hits = hits_to_json(DbName, true, Hits0, Cursor0#cursor.selector),
+        {ok, Bookmark1, _, Hits0, _, _} ->
+            Hits = hits_to_json(DbName, true, Hits0),
             % twig:log(notice, "Hits ~p", [Hits]),
-            Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark0),
+            Bookmark = dreyfus_fabric_search:pack_bookmark(Bookmark1),
             UserAcc1 = try UserFun({row, {[{bookmark, Bookmark}]}}, UserAcc) of
                 {ok, NewAcc} -> NewAcc;
                 {stop, Acc} -> Acc
@@ -101,6 +106,11 @@ sort_query(Opts) ->
         [] -> relevance;
         _ -> SortList
     end.
+
+
+get_bookmark(Opts) ->
+    {bookmark, Bookmark} = lists:keyfind(bookmark, 1, Opts),
+    Bookmark.
 
 
 ddocid(Idx) ->
@@ -150,20 +160,10 @@ choose_best_index(Indexes, IndexFields) ->
             hd(Indexes)
     end.
 
-hits_to_json(DbName, IncludeDocs, Hits, Selector) ->
+hits_to_json(DbName, IncludeDocs, Hits) ->
     {Ids, HitData} = lists:unzip(lists:map(fun get_hit_data/1, Hits)),
     if IncludeDocs ->
         {ok, JsonDocs} = dreyfus_fabric:get_json_docs(DbName, Ids),
-        % JsonDocs0 = case mango_selector:contains_op(Selector, [<<"$size">>]) of
-        %     true ->
-        %         filter_results(Selector, JsonDocs);
-        %     false ->
-        %         JsonDocs
-        % end,
-        % case JsonDocs0 of
-        %     [] -> 
-        %         [];
-        %     _ ->
         lists:zipwith(fun({Id, Order, Fields}, {Id, Doc}) ->
             {[{id, Id}, {order, Order}, {fields, {Fields}}, Doc]}
         end, HitData, JsonDocs);
@@ -178,11 +178,3 @@ get_hit_data(Hit) ->
     Id = couch_util:get_value(<<"_id">>, Hit#hit.fields),
     Fields = lists:keydelete(<<"_id">>, 1, Hit#hit.fields),
     {Id, {Id, Hit#hit.order, Fields}}.
-
-filter_results(Selector, JsonDocs) ->
-    twig:log(notice, "Selector in Filter ~p", [Selector]),
-    twig:log(notice, "JsonDocs ~p", [JsonDocs]),
-    lists:filter(fun ({DocId, {doc, Doc}}) -> 
-        twig:log(notice, "Doc in Filter ~p", [Doc]),
-        mango_selector:match(Selector, Doc)
-    end, JsonDocs).
