@@ -59,6 +59,3 @@ validate({Props}) ->
         _ ->
             ?MANGO_ERROR({unsupported, mixed_sort})
     end.
-        
-    
-
