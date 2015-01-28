@@ -35,7 +35,8 @@
     limit,
     skip,
     user_fun,
-    user_acc
+    user_acc,
+    fields
 }).
 
 
@@ -103,7 +104,8 @@ execute(Cursor, UserFun, UserAcc) ->
         skip = Skip,
         query_args = QueryArgs,
         user_fun = UserFun,
-        user_acc = UserAcc
+        user_acc = UserAcc,
+        fields = Cursor#cursor.fields
     },
     try
         execute(CAcc)
@@ -186,11 +188,12 @@ handle_hit(CAcc0, Sort, Doc) ->
 
 
 apply_user_fun(CAcc, Doc) ->
+    FinalDoc = mango_fields:extract(Doc, CAcc#cacc.fields),
     #cacc{
         user_fun = UserFun,
         user_acc = UserAcc
     } = CAcc,
-    case UserFun({row, Doc}, UserAcc) of
+    case UserFun({row, FinalDoc}, UserAcc) of
         {ok, NewUserAcc} ->
             CAcc#cacc{user_acc = NewUserAcc};
         {stop, NewUserAcc} ->
