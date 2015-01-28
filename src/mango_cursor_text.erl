@@ -56,6 +56,7 @@ create(Db, Indexes, Selector, Opts0) ->
     Limit = if Limit0 < 50 -> Limit0; true -> 50 end,
     Skip = couch_util:get_value(skip, Opts, 0),
     Fields = couch_util:get_value(fields, Opts, all_fields),
+
     {ok, #cursor{
         db = Db,
         index = Index,
