@@ -53,10 +53,15 @@ explain(Cursor) ->
         index = Idx,
         ranges = Ranges
     } = Cursor,
-    [{range, {[
-        {start_key, mango_idx:start_key(Idx, Ranges)},
-        {end_key, mango_idx:end_key(Idx, Ranges)}
-    ]}}].
+    case Ranges of
+        [empty] ->
+            [{range, empty}];
+        _ ->
+            [{range, {[
+                {start_key, mango_idx:start_key(Idx, Ranges)},
+                {end_key, mango_idx:end_key(Idx, Ranges)}
+            ]}}]
+    end.
 
 
 execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
@@ -64,26 +69,30 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
         user_fun = UserFun,
         user_acc = UserAcc
     },
-    BaseArgs = #view_query_args{
-        view_type = red_map,
-        start_key = mango_idx:start_key(Idx, Cursor#cursor.ranges),
-        end_key = mango_idx:end_key(Idx, Cursor#cursor.ranges),
-        include_docs = true
-    },
-    Args = apply_opts(Cursor#cursor.opts, BaseArgs),
-    CB = fun ?MODULE:handle_message/2,
-    {ok, LastCursor} = case mango_idx:def(Idx) of
-        all_docs ->
-            %twig:log(err, "Query: ~s all_docs~n  ~p", [Db#db.name, Args]),
-            fabric:all_docs(Db, CB, Cursor, Args);
+    case Cursor#cursor.ranges of
+        [empty] ->
+            % empty indicates unsatisfiable ranges, so don't perform search
+            {ok, UserAcc};
         _ ->
-            % Normal view
-            DDoc = ddocid(Idx),
-            Name = mango_idx:name(Idx),
-            %twig:log(err, "Query: ~s ~s ~s~n  ~p", [Db#db.name, DDoc, Name, Args]),
-            fabric:query_view(Db, DDoc, Name, CB, Cursor, Args)
-    end,
-    {ok, LastCursor#cursor.user_acc}.
+            BaseArgs = #view_query_args{
+                view_type = red_map,
+                start_key = mango_idx:start_key(Idx, Cursor#cursor.ranges),
+                end_key = mango_idx:end_key(Idx, Cursor#cursor.ranges),
+                include_docs = true
+            },
+            Args = apply_opts(Cursor#cursor.opts, BaseArgs),
+            CB = fun ?MODULE:handle_message/2,
+            {ok, LastCursor} = case mango_idx:def(Idx) of
+                all_docs ->
+                    fabric:all_docs(Db, CB, Cursor, Args);
+                _ ->
+                    % Normal view
+                    DDoc = ddocid(Idx),
+                    Name = mango_idx:name(Idx),
+                    fabric:query_view(Db, DDoc, Name, CB, Cursor, Args)
+            end,
+            {ok, LastCursor#cursor.user_acc}
+    end.
 
 
 % Any of these indexes may be a composite index. For each
