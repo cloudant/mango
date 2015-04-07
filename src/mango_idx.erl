@@ -231,7 +231,7 @@ idx_mod(#idx{type = <<"text">>}) ->
     mango_idx_text.
 
 
-db_to_name(#db{name=Name}) ->
+db_to_name(#db2{name=Name}) ->
     Name;
 db_to_name(Name) when is_binary(Name) ->
     Name;

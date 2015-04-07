@@ -143,7 +143,7 @@ handle_find_req(Req, _Db) ->
 
 
 set_user_ctx(#httpd{user_ctx=Ctx}, Db) ->
-    Db#db{user_ctx=Ctx}.
+    Db#db2{user_ctx=Ctx}.
 
 
 get_idx_create_opts(Opts) ->
