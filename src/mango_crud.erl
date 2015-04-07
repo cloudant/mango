@@ -111,7 +111,7 @@ maybe_add_user_ctx(Db, Opts) ->
         {user_ctx, _} ->
             Opts;
         false ->
-            [{user_ctx, Db#db2.user_ctx} | Opts]
+            [couch_db:info(Db, user_ctx) | Opts]
     end.
 
 
