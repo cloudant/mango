@@ -97,6 +97,8 @@ class Database(object):
         body = json.dumps(body)
         r = self.sess.post(self.path("_index"), data=body)
         r.raise_for_status()
+        assert r.json()["id"] is not None
+        assert r.json()["name"] is not None
         return r.json()["result"] == "created"
 
     def create_text_index(self, analyzer=None, selector=None, idx_type="text",

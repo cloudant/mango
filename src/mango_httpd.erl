@@ -58,6 +58,8 @@ handle_index_req(#httpd{method='POST', path_parts=[_, _]}=Req, Db) ->
     {ok, Opts} = mango_opts:validate_idx_create(chttpd:json_body_obj(Req)),
     {ok, Idx0} = mango_idx:new(Db, Opts),
     {ok, Idx} = mango_idx:validate(Idx0),
+    Id = mango_idx:ddoc(Idx),
+    Name = mango_idx:name(Idx),
     {ok, DDoc} = mango_util:load_ddoc(Db, mango_idx:ddoc(Idx)),
     Status = case mango_idx:add(DDoc, Idx) of
         {ok, DDoc} ->
@@ -76,7 +78,7 @@ handle_index_req(#httpd{method='POST', path_parts=[_, _]}=Req, Db) ->
                     ?MANGO_ERROR(error_saving_ddoc)
             end
     end,
-	chttpd:send_json(Req, {[{result, Status}]});
+	chttpd:send_json(Req, {[{result, Status}, {id, Id}, {name, Name}]});
 
 handle_index_req(#httpd{method='DELETE',
         path_parts=[A, B, <<"_design">>, DDocId0, Type, Name]}=Req, Db) ->
