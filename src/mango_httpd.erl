@@ -76,6 +76,8 @@ handle_index_req(#httpd{method='POST', path_parts=[_, _]}=Req, Db) ->
     {ok, Opts} = mango_opts:validate_idx_create(chttpd:json_body_obj(Req)),
     {ok, Idx0} = mango_idx:new(Db, Opts),
     {ok, Idx} = mango_idx:validate(Idx0),
+    Id = mango_idx:ddoc(Idx),
+    Name = mango_idx:name(Idx),
     {ok, DDoc} = mango_util:load_ddoc(Db, mango_idx:ddoc(Idx)),
     Id = Idx#idx.ddoc,
     Name = Idx#idx.name,
