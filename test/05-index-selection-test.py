@@ -31,6 +31,14 @@ class IndexSelectionTests(mango.UserDocsTests):
             }, explain=True)
         assert resp["index"]["type"] == "json"
 
+    def test_with_text(self):
+        resp = self.db.find({
+                "$text" : "Stephanie",
+                "name.first": "Stephanie",
+                "name.last": "This doesn't have to match anything."
+            }, explain=True)
+        assert resp["index"]["type"] == "text"
+
     def test_no_view_index(self):
         resp = self.db.find({"name.first": "Ohai!"}, explain=True)
         assert resp["index"]["type"] == "text"
