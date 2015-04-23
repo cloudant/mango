@@ -21,6 +21,7 @@
     to_json/1,
     columns/1,
     is_usable/2,
+    indexable_fields/1,
     get_default_field_options/1
 ]).
 
@@ -226,6 +227,9 @@ construct_analyzer({Props}) ->
     end.
 
 
+%% Empty Selector
+indexable_fields({[]}) ->
+    [];
 indexable_fields(Selector) ->
     TupleTree = mango_selector_text:convert([], Selector),
     indexable_fields([], TupleTree).
@@ -239,7 +243,8 @@ indexable_fields(Fields, {op_or, Args}) when is_list(Args) ->
     lists:foldl(fun(Arg, Fields0) -> indexable_fields(Fields0, Arg) end,
         Fields, Args);
 
-indexable_fields(Fields, {op_not, {ExistsQuery, Arg}}) when is_tuple(Arg) ->
+indexable_fields(Fields, {op_not, {ExistsQuery, Arg}})
+        when is_tuple(Arg); is_boolean(Arg)->
     Fields0 = indexable_fields(Fields, ExistsQuery),
     indexable_fields(Fields0, Arg);
 
@@ -261,4 +266,9 @@ indexable_fields(Fields, {op_null, {_, _}}) ->
     Fields;
 
 indexable_fields(Fields, {op_default, _}) ->
-    [<<"$default">> | Fields].
+    [<<"$default">> | Fields];
+
+%% Some lingering term that made it through so rather than throwing
+%% an error, we just return fields.
+indexable_fields(Fields, _) ->
+    Fields.

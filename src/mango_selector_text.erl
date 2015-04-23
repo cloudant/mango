@@ -103,6 +103,12 @@ convert(Path, {[{<<"$eq">>, Args}]}) when is_list(Args) ->
     Parts0 = [convert(Path0, {[{<<"$eq">>, Arg}]}) || Arg <- Args],
     Parts = [LPart | Parts0],
     {op_and, Parts};
+%% We treat {} as a field exists because of fields below:
+%% {
+%%     "field" : {}
+%% }
+convert(Path, {[{<<"$eq">>, {[]}}]}) ->
+    field_exists_query(Path);
 convert(Path, {[{<<"$eq">>, {_} = Arg}]}) ->
     convert(Path, Arg);
 convert(Path, {[{<<"$eq">>, Arg}]}) ->
