@@ -112,7 +112,12 @@ is_usable(Idx, Selector) ->
     % a member of the indexable fields of the selector.
     Columns = columns(Idx),
     Fields = indexable_fields(Selector),
-    lists:member(hd(Columns), Fields).
+    lists:member(hd(Columns), Fields) and not is_text_search(Selector).
+
+
+is_text_search(Selector) ->
+    Fields = mango_idx_text:indexable_fields(Selector),
+    lists:member(<<"$default">>, Fields).
 
 
 start_key([]) ->
