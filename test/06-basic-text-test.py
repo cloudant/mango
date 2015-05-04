@@ -384,6 +384,11 @@ class BasicTextTests(mango.UserDocsTextTests):
         assert docs[0]["user_id"] == 2
         assert docs[1]["user_id"] == 10
 
+    def test_size(self):
+        docs = self.db.find({"favorites": {"$size": 4}})
+        for d in docs:
+            assert len(d["favorites"]) ==  4
+
     # test lucene syntax in $text
 
 
