@@ -157,7 +157,7 @@ convert(Path, {[{<<"$regex">>, _}]}) ->
     field_exists_query(Path, "string");
 
 convert(Path, {[{<<"$size">>, Arg}]}) ->
-    {op_field, {make_field(Path, length), value_str(Arg)}};
+    {op_field, {make_field([<<"[]">> | Path], length), value_str(Arg)}};
 
 % All other operators are internal assertion errors for
 % matching because we either should've removed them during
