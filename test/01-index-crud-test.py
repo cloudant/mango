@@ -210,3 +210,24 @@ class IndexCrudTests(mango.DbPerClass):
             ]
             return
         raise AssertionError("index not created")
+
+    def test_create_bad_text_idx(self):
+        bad_fields = [
+            True,
+            False,
+            "bing",
+            2.0,
+            ["foo", "bar"],
+            [{"name": "foo2"}],
+            [{"name": "foo3", "type": "garbage"}],
+            [{"type": "number"}],
+            [{"name": "age", "type": "number"} , {"name": "bad"}],
+            [{"name": "age", "type": "number"} , "bla"]
+        ]
+        for fields in bad_fields:
+            try:
+                self.db.create_text_index(fields=fields)
+            except Exception, e:
+                assert e.response.status_code == 400
+            else:
+                raise AssertionError("bad create text index")
