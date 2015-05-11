@@ -110,6 +110,7 @@ info(mango_idx, {invalid_index_type, BadType}) ->
         <<"invalid_index">>,
         fmt("Invalid type for index: ~s", [BadType])
     };
+
 info(mango_idx, invalid_query_ddoc_language) ->
     {
         400,
@@ -157,6 +158,13 @@ info(mango_idx_text, {index_not_found, BadIdx}) ->
         fmt("Text index ~s not found in this design doc.", [BadIdx])
     };
 
+info(mango_opts, {invalid_bulk_docs, Val}) ->
+    {
+        400,
+        <<"invalid_bulk_docs">>,
+        fmt("Bulk Delete requires an array of non-null docids. Docids: ~w",
+            [Val])
+    };
 info(mango_opts, {invalid_ejson, Val}) ->
     {
         400,
