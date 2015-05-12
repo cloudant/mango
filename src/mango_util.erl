@@ -36,6 +36,8 @@
     lucene_escape_user/1,
     is_number_string/1,
 
+    check_lang/1,
+
     has_suffix/2,
 
     join/2

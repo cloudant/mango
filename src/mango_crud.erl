@@ -21,7 +21,8 @@
 ]).
 
 -export([
-    collect_cb/2
+    collect_cb/2,
+    maybe_add_user_ctx/2
 ]).
 
 
