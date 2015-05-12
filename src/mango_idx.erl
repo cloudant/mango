@@ -26,6 +26,7 @@
     validate/1,
     add/2,
     remove/2,
+    bulk_delete/3,
     from_ddoc/2,
     special/1,
 
@@ -132,6 +133,67 @@ remove(DDoc, Idx) ->
     % Round trip through JSON for normalization
     Body = ?JSON_DECODE(?JSON_ENCODE(NewDDoc#doc.body)),
     {ok, NewDDoc#doc{body = Body}}.
+
+
+bulk_delete(Db, DDocIds, DelOpts0) ->
+    DelOpts = mango_crud:maybe_add_user_ctx(Db, DelOpts0),
+    {DeleteDocs, Errors} = lists:foldl(fun(DDocId0, {D, E}) ->
+        Id = {<<"id">>, DDocId0},
+        case get_bulk_delete_ddoc(Db, DDocId0) of
+            not_found ->
+                {D, [{[Id, {<<"error">>, <<"does not exist">>}]} | E]};
+            invalid_ddoc_lang ->
+                {D, [{[Id, {<<"error">>, <<"not a query doc">>}]} | E]};
+            error_loading_doc ->
+                {D, [{[Id, {<<"error">>, <<"loading doc">>}]} | E]};
+            DDoc ->
+                {[DDoc#doc{deleted = true, body = {[]}} | D], E }
+        end
+    end, {[], []}, DDocIds),
+    case fabric:update_docs(Db, DeleteDocs, DelOpts) of
+        {ok, Results} ->
+            bulk_delete_results(lists:zip(DeleteDocs, Results), Errors);
+        {accepted, Results} ->
+            bulk_delete_results(lists:zip(DeleteDocs, Results), Errors);
+        {aborted, Abort} ->
+            bulk_delete_results(lists:zip(DeleteDocs, Abort), Errors)
+    end.
+
+
+bulk_delete_results(DeleteResults, LoadErrors) ->
+    {Success, Errors} = lists:foldl(fun({#doc{id=DDocId}, Result}, {S, E}) ->
+        Id = {<<"id">>, DDocId},
+        case Result of
+            {_, {_Pos, _}} ->
+                {[{[Id, {<<"ok">>, true}]} | S], E};
+            {{_Id, _Rev}, Error} ->
+                {_Code, ErrorStr, _Reason} = chttpd:error_info(Error),
+                {S, [{[Id, {<<"error">>, ErrorStr}]} | E]};
+            Error ->
+                {_Code, ErrorStr, _Reason} = chttpd:error_info(Error),
+                {S, [{[Id, {<<"error">>, ErrorStr}]} | E]}
+        end
+    end, {[], []}, DeleteResults),
+    {Success, Errors ++ LoadErrors}.
+
+
+get_bulk_delete_ddoc(Db, Id0) ->
+    Id = case Id0 of
+        <<"_design/", _/binary>> -> Id0;
+        _ -> <<"_design/", Id0/binary>>
+    end,
+    try mango_util:open_doc(Db, Id) of
+        {ok, #doc{deleted = false} = Doc} ->
+            mango_util:check_lang(Doc),
+            Doc;
+        not_found ->
+            not_found
+    catch
+        {{mango_error, mango_util, {invalid_ddoc_lang, _}}} ->
+            invalid_ddoc_lang;
+        {{mango_error, mango_util, {error_loading_doc, _}}} ->
+            error_loading_doc
+    end.
 
 
 from_ddoc(Db, {Props}) ->

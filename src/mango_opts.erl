@@ -14,7 +14,8 @@
 
 -export([
     validate_idx_create/1,
-    validate_find/1
+    validate_find/1,
+    validate_bulk_delete/1
 ]).
 
 -export([
@@ -129,6 +130,22 @@ validate_find({Props}) ->
     validate(Props, Opts).
 
 
+validate_bulk_delete({Props}) ->
+    Opts = [
+        {<<"docids">>, [
+            {tag, docids},
+            {validator, fun validate_bulk_docs/1}
+        ]},
+        {<<"w">>, [
+            {tag, w},
+            {optional, true},
+            {default, 2},
+            {validator, fun is_pos_integer/1}
+        ]}
+    ],
+    validate(Props, Opts).
+
+
 validate(Props, Opts) ->
     case mango_util:assert_ejson({Props}) of
         true ->
@@ -190,6 +207,13 @@ validate_selector({Props}) ->
     {ok, Norm};
 validate_selector(Else) ->
     ?MANGO_ERROR({invalid_selector_json, Else}).
+
+
+validate_bulk_docs(Docs) when is_list(Docs) ->
+    lists:foreach(fun ?MODULE:is_string/1, Docs),
+    {ok, Docs};
+validate_bulk_docs(Else) ->
+    ?MANGO_ERROR({invalid_bulk_docs, Else}).
 
 
 validate_use_index(IndexName) when is_binary(IndexName) ->

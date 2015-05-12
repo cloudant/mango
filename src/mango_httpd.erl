@@ -80,6 +80,14 @@ handle_index_req(#httpd{method='POST', path_parts=[_, _]}=Req, Db) ->
     end,
 	chttpd:send_json(Req, {[{result, Status}, {id, Id}, {name, Name}]});
 
+handle_index_req(#httpd{method='POST', path_parts=[_, <<"_index">>,
+        <<"_bulk_delete">>]}=Req, Db) ->
+    {ok, Opts} = mango_opts:validate_bulk_delete(chttpd:json_body_obj(Req)),
+    DDocIds = get_bulk_delete_ddocs_ids(Opts),
+    DelOpts = get_idx_create_opts(Opts),
+    {Success, Error} = mango_idx:bulk_delete(Db, DDocIds, DelOpts),
+    chttpd:send_json(Req, {[{<<"success">>, Success}, {<<"error">>, Error}]});
+
 handle_index_req(#httpd{method='DELETE',
         path_parts=[A, B, <<"_design">>, DDocId0, Type, Name]}=Req, Db) ->
     PathParts = [A, B, <<"_design/", DDocId0/binary>>, Type, Name],
@@ -154,6 +162,15 @@ get_idx_create_opts(Opts) ->
             [{w, integer_to_list(N)}];
         _ ->
             [{w, "2"}]
+    end.
+
+
+get_bulk_delete_ddocs_ids(Opts) ->
+    case lists:keyfind(docids, 1, Opts) of
+        {docids, DDocs} when is_list(DDocs) ->
+            DDocs;
+        _ ->
+            []
     end.
 
 
