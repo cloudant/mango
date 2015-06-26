@@ -181,7 +181,8 @@ convert(Path, {[{Field0, Cond}]}) ->
     % an incorrect query since we need [<<"a.b">>]. Without breaking
     % our escaping mechanism, we simply revert this first parse_field
     % effect and replace instances of "." to "\\.".
-    PP1 = [re:replace(P, ?PERIOD, <<"\\\\.">>,
+    {ok, PeriodRE} = application:get_env(mango, period_re),
+    PP1 = [re:replace(P, PeriodRE, <<"\\\\.">>,
         [global,{return,binary}]) || P <- PP0],
     {PP2, HasInteger} = replace_array_indexes(PP1, [], false),
     NewPath = PP2 ++ Path,
