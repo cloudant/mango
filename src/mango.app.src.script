@@ -10,6 +10,36 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
+{ok, PeriodRE} = re:compile("\\.").
+
+Digits = "(\\p{N}+)".
+HexDigits = "([0-9a-fA-F]+)".
+Exp = "[eE][+-]?" ++ Digits.
+
+{ok, NumberRE} = re:compile("[\\x00-\\x20]*" ++ "[+-]?(" ++ "NaN|"
+     ++ "Infinity|" ++ "((("
+     ++ Digits
+     ++ "(\\.)?("
+     ++ Digits
+     ++ "?)("
+     ++ Exp
+     ++ ")?)|"
+     ++ "(\\.("
+     ++ Digits
+     ++ ")("
+     ++ Exp
+     ++ ")?)|"
+     ++ "(("
+     ++ "(0[xX]"
+     ++ HexDigits
+     ++ "(\\.)?)|"
+     ++ "(0[xX]"
+     ++ HexDigits
+     ++ "?(\\.)"
+     ++ HexDigits
+     ++ ")"
+     ++ ")[pP][+-]?" ++ Digits ++ "))" ++ "[fFdD]?))" ++ "[\\x00-\\x20]*").
+
 {application, mango, [
     {description, "MongoDB API compatibility layer for CouchDB"},
     {vsn, git},
@@ -20,5 +50,9 @@
         config,
         twig,
         fabric
+    ]},
+    {env, [
+        {period_re, PeriodRE},
+        {number_re, NumberRE}
     ]}
 ]}.
