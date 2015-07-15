@@ -22,4 +22,5 @@ start_link(Args) ->
 
 init([]) ->
     {ok, {{one_for_one, 3, 10}, [
+        chttpd_handlers:registration_childspec(mango, mango_httpd_handlers)
     ]}}.
