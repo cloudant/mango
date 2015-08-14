@@ -117,7 +117,7 @@ handle_find_req(Req, _Db) ->
 
 
 set_user_ctx(#httpd{user_ctx=Ctx}, Db) ->
-    {ok, NewDb} = couch_db:set(Db, user_ctx, Ctx),
+    {ok, NewDb} = couch_db:set_user_ctx(Db, Ctx),
     NewDb.
 
 
