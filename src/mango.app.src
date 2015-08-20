@@ -17,8 +17,10 @@
     {applications, [
         kernel,
         stdlib,
+        couch_epi,
         couch_log,
         config,
         fabric
-    ]}
+    ]},
+    {mod, {mango_app, []}}
 ]}.
