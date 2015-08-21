@@ -570,3 +570,10 @@ class NumStringTests(mango.NumStringDocsTextTests):
         docs = self.db.find(q)
         assert len(docs) == 1
         assert docs[0]["number_string"] == "Infinity"
+
+    def test_field_name_floating_point_val(self):
+        float_point_string = num_string_docs.DOCS[2]["number_string"]
+        q = {"number_string": float_point_string}
+        docs = self.db.find(q)
+        assert len(docs) == 1
+        assert docs[0]["number_string"] == float_point_string
