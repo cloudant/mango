@@ -20,7 +20,6 @@ import requests
 import friend_docs
 import user_docs
 import limit_docs
-import num_string_docs
 
 
 def random_db_name():
