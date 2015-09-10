@@ -13,7 +13,7 @@
 import mango
 import user_docs
 import math
-from hypothesis import given, assume, example
+import hypothesis as hy
 import hypothesis.strategies as st
 
 
@@ -552,20 +552,27 @@ class NumStringTests(mango.DbPerClass):
     def setUpClass(klass):
         super(NumStringTests, klass).setUpClass()
         klass.db.recreate()
-            klass.db.create_text_index()
+        klass.db.create_text_index()
 
     # not available for python 2.7.x
     def isFinite(num):
         not (math.isinf(num) or math.isnan(num))
 
-    @given(f=st.floats().filter(isFinite).map(str)
+    @hy.given(f=st.floats().filter(isFinite).map(str)
         | st.floats().map(lambda f: f.hex()))
-    @example('NaN')
-    @example('Infinity')
+    @hy.example('NaN')
+    @hy.example('Infinity')
     def test_floating_point_val(self,f):
         doc = {"number_string": f}
         self.db.save_doc(doc)
         q = {"$text": f}
+        docs = self.db.find(q)
+        if len(docs) == 1:
+            assert docs[0]["number_string"] == f
+        if len(docs) == 2:
+            if docs[0]["number_string"] != f:
+                assert docs[1]["number_string"] == f
+        q = {"number_string": f}
         docs = self.db.find(q)
         if len(docs) == 1:
             assert docs[0]["number_string"] == f
