@@ -149,9 +149,9 @@ get_text_entries({IdxProps}, Doc) ->
 
 get_text_entries0(IdxProps, Doc) ->
     DefaultEnabled = get_default_enabled(IdxProps),
-    Index_Array_Lengths = get_index_array_lengths(IdxProps),
+    IndexArrayLengths = get_index_array_lengths(IdxProps),
     FieldsList = get_text_field_list(IdxProps),
-    TAcc = #tacc{index_array_lengths = Index_Array_Lengths, fields = FieldsList},
+    TAcc = #tacc{index_array_lengths = IndexArrayLengths, fields = FieldsList},
     Fields0 = get_text_field_values(Doc, TAcc),
     Fields = if not DefaultEnabled -> Fields0; true ->
         add_default_text_field(Fields0)
@@ -165,10 +165,10 @@ get_text_field_values({Props}, TAcc) when is_list(Props) ->
     get_text_field_values_obj(Props, TAcc, []);
 
 get_text_field_values(Values, TAcc) when is_list(Values) ->
-    Index_Array_Lengths = TAcc#tacc.index_array_lengths,
+    IndexArrayLengths = TAcc#tacc.index_array_lengths,
     NewPath = ["[]" | TAcc#tacc.path],
-    NewTAcc = TAcc#tacc{index_array_lengths = Index_Array_Lengths, path = NewPath},
-    case Index_Array_Lengths of 
+    NewTAcc = TAcc#tacc{index_array_lengths = IndexArrayLengths, path = NewPath},
+    case IndexArrayLengths of 
         true ->
             % We bypass make_text_field and directly call make_text_field_name
             % because the length field name is not part of the path.
@@ -194,9 +194,9 @@ get_text_field_values(null, TAcc) ->
 get_text_field_values_obj([], _, FAcc) ->
     FAcc;
 get_text_field_values_obj([{Key, Val} | Rest], TAcc, FAcc) ->
-    Index_Array_Lengths = TAcc#tacc.index_array_lengths,
+    IndexArrayLengths = TAcc#tacc.index_array_lengths,
     NewPath = [Key | TAcc#tacc.path],
-    NewTAcc = TAcc#tacc{index_array_lengths = Index_Array_Lengths, path = NewPath},
+    NewTAcc = TAcc#tacc{index_array_lengths = IndexArrayLengths, path = NewPath},
     Fields = get_text_field_values(Val, NewTAcc),
     get_text_field_values_obj(Rest, TAcc, Fields ++ FAcc).
 
