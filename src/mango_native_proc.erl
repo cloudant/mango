@@ -178,10 +178,10 @@ get_text_field_values(Values, TAcc) when is_list(Values) ->
             LengthFieldName = make_text_field_name(NewTAcc#tacc.path, <<"length">>),
             LengthField = [{LengthFieldName, <<"length">>, length(Values)}],
             get_text_field_values_arr(Values, NewTAcc, LengthField);
-
         _ ->
             get_text_field_values_arr(Values, NewTAcc, [])
     end;
+
 get_text_field_values(Bin, TAcc) when is_binary(Bin) ->
     make_text_field(TAcc, <<"string">>, Bin);
 
