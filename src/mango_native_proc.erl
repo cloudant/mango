@@ -37,7 +37,6 @@
 
 
 -record(tacc, {
-    index_array_lengths = true,
     fields = all_fields,
     path = []
 }).
@@ -149,12 +148,8 @@ get_text_entries({IdxProps}, Doc) ->
 
 get_text_entries0(IdxProps, Doc) ->
     DefaultEnabled = get_default_enabled(IdxProps),
-    IndexArrayLengths = get_index_array_lengths(IdxProps),
     FieldsList = get_text_field_list(IdxProps),
-    TAcc = #tacc{
-        index_arrray_lengths = IndexArrayLengths,
-        fields = FieldsList
-    },
+    TAcc = #tacc{fields = FieldsList},
     Fields0 = get_text_field_values(Doc, TAcc),
     Fields = if not DefaultEnabled -> Fields0; true ->
         add_default_text_field(Fields0)
@@ -168,19 +163,13 @@ get_text_field_values({Props}, TAcc) when is_list(Props) ->
     get_text_field_values_obj(Props, TAcc, []);
 
 get_text_field_values(Values, TAcc) when is_list(Values) ->
-    IndexArrayLengths = TAcc#tacc.index_array_lengths,
     NewPath = ["[]" | TAcc#tacc.path],
     NewTAcc = TAcc#tacc{path = NewPath},
-    case IndexArrayLengths of 
-        true ->
-            % We bypass make_text_field and directly call make_text_field_name
-            % because the length field name is not part of the path.
-            LengthFieldName = make_text_field_name(NewTAcc#tacc.path, <<"length">>),
-            LengthField = [{LengthFieldName, <<"length">>, length(Values)}],
-            get_text_field_values_arr(Values, NewTAcc, LengthField);
-        _ ->
-            get_text_field_values_arr(Values, NewTAcc, [])
-    end;
+    % We bypass make_text_field and directly call make_text_field_name
+    % because the length field name is not part of the path.
+    LengthFieldName = make_text_field_name(NewTAcc#tacc.path, <<"length">>),
+    LengthField = [{LengthFieldName, <<"length">>, length(Values)}],
+    get_text_field_values_arr(Values, NewTAcc, LengthField);
 
 get_text_field_values(Bin, TAcc) when is_binary(Bin) ->
     make_text_field(TAcc, <<"string">>, Bin);
@@ -220,10 +209,6 @@ get_default_enabled(Props) ->
         {Opts}->
             couch_util:get_value(<<"enabled">>, Opts, true)
     end.
-
-
-get_index_array_lengths(Props) ->
-    couch_util:get_value(<<"index_array_lengths">>, Props, true).
 
 
 add_default_text_field(Fields) ->
