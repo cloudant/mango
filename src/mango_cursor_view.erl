@@ -24,7 +24,6 @@
 
 
 -include_lib("couch/include/couch_db.hrl").
--include_lib("couch_mrview/include/couch_mrview.hrl").
 -include("mango_cursor.hrl").
 
 
@@ -75,8 +74,8 @@ execute(#cursor{db = Db, index = Idx} = Cursor0, UserFun, UserAcc) ->
             % empty indicates unsatisfiable ranges, so don't perform search
             {ok, UserAcc};
         _ ->
-            BaseArgs = #mrargs{
-                reduce = false,
+            BaseArgs = #view_query_args{
+                view_type = red_map,
                 start_key = mango_idx:start_key(Idx, Cursor#cursor.ranges),
                 end_key = mango_idx:end_key(Idx, Cursor#cursor.ranges),
                 include_docs = true
@@ -146,10 +145,10 @@ choose_best_index(_DbName, IndexRanges) ->
 
 
 handle_message({total_and_offset, _, _} = _TO, Cursor) ->
-    {ok, Cursor};
-handle_message({meta, _}, Cursor) ->
+    %twig:log(err, "TOTAL AND OFFSET: ~p", [_TO]),
     {ok, Cursor};
 handle_message({row, {Props}}, Cursor) ->
+    %twig:log(err, "ROW: ~p", [Props]),
     case doc_member(Cursor#cursor.db, Props, Cursor#cursor.opts) of
         {ok, Doc} ->
             case mango_selector:match(Cursor#cursor.selector, Doc) of
@@ -160,14 +159,14 @@ handle_message({row, {Props}}, Cursor) ->
                     {ok, Cursor}
             end;
         Error ->
-            couch_log:error("~s :: Error loading doc: ~p", [?MODULE, Error]),
+            twig:log(err, "~s :: Error loading doc: ~p", [?MODULE, Error]),
             {ok, Cursor}
     end;
-handle_message({row, Props}, Cursor) when is_list(Props) ->
-    handle_message({row, {Props}}, Cursor);
 handle_message(complete, Cursor) ->
+    %twig:log(err, "COMPLETE", []),
     {ok, Cursor};
 handle_message({error, Reason}, _Cursor) ->
+    %twig:log(err, "ERROR: ~p", [Reason]),
     {error, Reason}.
 
 
@@ -206,7 +205,7 @@ apply_opts([{r, RStr} | Rest], Args) ->
             % so there's no point.
             false
     end,
-    NewArgs = Args#mrargs{include_docs = IncludeDocs},
+    NewArgs = Args#view_query_args{include_docs = IncludeDocs},
     apply_opts(Rest, NewArgs);
 apply_opts([{conflicts, true} | Rest], Args) ->
     % I need to patch things so that views can specify
@@ -224,16 +223,16 @@ apply_opts([{sort, Sort} | Rest], Args) ->
         [<<"asc">> | _] ->
             apply_opts(Rest, Args);
         [<<"desc">> | _] ->
-            SK = Args#mrargs.start_key,
-            SKDI = Args#mrargs.start_key_docid,
-            EK = Args#mrargs.end_key,
-            EKDI = Args#mrargs.end_key_docid,
-            NewArgs = Args#mrargs{
+            SK = Args#view_query_args.start_key,
+            SKDI = Args#view_query_args.start_docid,
+            EK = Args#view_query_args.end_key,
+            EKDI = Args#view_query_args.end_docid,
+            NewArgs = Args#view_query_args{
                 direction = rev,
                 start_key = EK,
-                start_key_docid = EKDI,
+                start_docid = EKDI,
                 end_key = SK,
-                end_key_docid = SKDI
+                end_docid = SKDI
             },
             apply_opts(Rest, NewArgs)
     end;
