@@ -12,7 +12,9 @@
 
 import mango
 import user_docs
-import num_string_docs
+import math
+import hypothesis as hy
+import hypothesis.strategies as st
 
 
 class BasicTextTests(mango.UserDocsTextTests):
@@ -544,29 +546,36 @@ class ElemMatchTests(mango.FriendDocsTextTests):
 
 
 # Test numeric strings for $text
-class NumStringTests(mango.NumStringDocsTextTests):
-    def test_floating_point_val(self):
-        float_point_string = num_string_docs.DOCS[2]["number_string"]
-        q = {"$text": float_point_string}
-        docs = self.db.find(q)
-        assert len(docs) == 1
-        assert docs[0]["number_string"] == float_point_string
+class NumStringTests(mango.DbPerClass):
 
-    def test_hex_floating_point_val(self):
-        hex_float_point_string = num_string_docs.DOCS[3]["number_string"]
-        q = {"$text": hex_float_point_string}
-        docs = self.db.find(q)
-        assert len(docs) == 1
-        assert docs[0]["number_string"] == hex_float_point_string
+    @classmethod
+    def setUpClass(klass):
+        super(NumStringTests, klass).setUpClass()
+        klass.db.recreate()
+        klass.db.create_text_index()
 
-    def test_nan_val(self):
-        q = {"$text": "NaN"}
-        docs = self.db.find(q)
-        assert len(docs) == 1
-        assert docs[0]["number_string"] == "NaN"
+    # not available for python 2.7.x
+    def isFinite(num):
+        not (math.isinf(num) or math.isnan(num))
 
-    def test_infinity_val(self):
-        q = {"$text": "Infinity"}
+    @hy.given(f=st.floats().filter(isFinite).map(str)
+        | st.floats().map(lambda f: f.hex()))
+    @hy.example('NaN')
+    @hy.example('Infinity')
+    def test_floating_point_val(self,f):
+        doc = {"number_string": f}
+        self.db.save_doc(doc)
+        q = {"$text": f}
         docs = self.db.find(q)
-        assert len(docs) == 1
-        assert docs[0]["number_string"] == "Infinity"
+        if len(docs) == 1:
+            assert docs[0]["number_string"] == f
+        if len(docs) == 2:
+            if docs[0]["number_string"] != f:
+                assert docs[1]["number_string"] == f
+        q = {"number_string": f}
+        docs = self.db.find(q)
+        if len(docs) == 1:
+            assert docs[0]["number_string"] == f
+        if len(docs) == 2:
+            if docs[0]["number_string"] != f:
+                assert docs[1]["number_string"] == f
