@@ -69,6 +69,75 @@ class IndexSelectionTests(mango.UserDocsTests):
             }, use_index=ddocid, explain=True)
         assert resp["index"]["ddoc"] == ddocid
 
+     # Silently log error and use good index def in ddoc
+    def test_manual_bad_view_idx01(self):
+        design_doc = {
+            "_id": "_design/bad_view_index",
+            "language": "query",
+            "views": {
+                "queryidx1": {
+                    "map": {
+                        "fields": {
+                            "age": "asc"
+                        }
+                    },
+                    "reduce": "_count",
+                    "options": {
+                        "def": {
+                            "fields": [
+                                {
+                                    "age": "asc"
+                                }
+                            ]
+                        },
+                        "w": 2
+                    }
+                }
+            },
+            "views" : {
+                "views001" : {
+                "map" : "function(employee){if(employee.training)"
+                    + "{emit(employee.number, employee.training);}}"
+                }
+            }
+        }
+        self.db.save_doc(design_doc)
+        docs= self.db.find({"age" : 48})
+        assert len(docs) == 1
+        assert docs[0]["name"]["first"] == "Stephanie"
+        assert docs[0]["age"] == 48
+
+    def test_manual_bad_text_idx(self):
+        design_doc = {
+            "_id": "_design/bad_text_index",
+            "language": "query",
+            "indexes": {
+                    "text_index": {
+                        "default_analyzer": "keyword",
+                        "default_field": {},
+                        "selector": {},
+                        "fields": "all_fields",
+                        "analyzer": {
+                        "name": "perfield",
+                        "default": "keyword",
+                        "fields": {
+                            "$default": "standard"
+                        }
+                    }
+                }
+            },
+            "indexes": {
+                "st_index": {
+                    "analyzer": "standard",
+                    "index": "function(doc){\n index(\"st_index\", doc.geometry);\n}"
+                }
+            }
+        }
+        self.db.save_doc(design_doc)
+        docs= self.db.find({"age" : 48})
+        assert len(docs) == 1
+        assert docs[0]["name"]["first"] == "Stephanie"
+        assert docs[0]["age"] == 48
 
 class MultiTextIndexSelectionTests(mango.UserDocsTests):
     @classmethod
