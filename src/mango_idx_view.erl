@@ -135,6 +135,8 @@ is_text_search(Val)
 
 start_key([]) ->
     [];
+start_key([empty]) ->
+    [];
 start_key([{'$gt', Key, _, _} | Rest]) ->
     case mango_json:special(Key) of
         true ->
@@ -151,6 +153,8 @@ start_key([{'$eq', Key, '$eq', Key} | Rest]) ->
 
 
 end_key([]) ->
+    [{[]}];
+end_key([empty]) ->
     [{[]}];
 end_key([{_, _, '$lt', Key} | Rest]) ->
     case mango_json:special(Key) of
